@@ -1,0 +1,106 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and role information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "description": "User email" },
+        "role": { "type": "string", "enum": ["admin", "user"], "description": "User role (admin can see everything)" },
+        "displayName": { "type": "string", "description": "User display name" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "A task to be completed",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "completed": { "type": "boolean" },
+        "userId": { "type": "string", "description": "Owner of the task" }
+      },
+      "required": ["id", "title", "completed", "userId"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "A project containing goals",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "userId": { "type": "string" }
+      },
+      "required": ["id", "title", "userId"]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "Calendar appointment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "category": { "type": "string" },
+        "userId": { "type": "string" }
+      },
+      "required": ["id", "title", "date", "time", "category", "userId"]
+    },
+    "MealEntry": {
+      "title": "MealEntry",
+      "description": "Diet meal entry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "dayOfWeek": { "type": "integer" },
+        "type": { "type": "string" },
+        "time": { "type": "string" },
+        "userId": { "type": "string" }
+      },
+      "required": ["id", "dayOfWeek", "type", "time", "userId"]
+    },
+    "TrainingEntry": {
+      "title": "TrainingEntry",
+      "description": "Training entry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "dayOfWeek": { "type": "integer" },
+        "type": { "type": "string" },
+        "time": { "type": "string" },
+        "userId": { "type": "string" }
+      },
+      "required": ["id", "dayOfWeek", "type", "time", "userId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/tasks/{taskId}": {
+      "schema": "Task",
+      "description": "Tasks collection"
+    },
+    "/projects/{projectId}": {
+      "schema": "Project",
+      "description": "Projects collection"
+    },
+    "/appointments/{appointmentId}": {
+      "schema": "Appointment",
+      "description": "Appointments collection"
+    },
+    "/diet/{mealId}": {
+      "schema": "MealEntry",
+      "description": "Diet entries"
+    },
+    "/training/{trainingId}": {
+      "schema": "TrainingEntry",
+      "description": "Training entries"
+    }
+  }
+}

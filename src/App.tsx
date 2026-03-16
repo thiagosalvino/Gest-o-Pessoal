@@ -25,7 +25,10 @@ import {
   BookOpen,
   Eye,
   Pencil,
-  Utensils
+  Utensils,
+  LogOut,
+  User as UserIcon,
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -46,54 +49,171 @@ import { Dashboard } from './components/Dashboard';
 import { Calendar } from './components/Calendar';
 import { KanbanBoard } from './components/KanbanBoard';
 import { DietTraining } from './components/DietTraining';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { Login } from './components/Login';
+
+import { 
+  collection, 
+  query, 
+  where, 
+  onSnapshot, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc, 
+  setDoc,
+  getDocs,
+  writeBatch
+} from 'firebase/firestore';
+import { db } from './firebase';
 
 const STORAGE_KEY = 'organizer_app_data';
 
-export default function App() {
-  const [data, setData] = useState<AppData>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    const defaultData: AppData = {
-      projects: [{ id: 'default', title: 'Meu Primeiro Projeto', color: '#f97316', createdAt: Date.now() }],
-      goals: [],
-      tasks: [],
-      appointments: [],
-      diet: [],
-      training: []
-    };
+const ProfileModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
+  const { userProfile, updateProfile } = useAuth();
+  const [name, setName] = useState(userProfile?.displayName || '');
+  const [birthDate, setBirthDate] = useState(userProfile?.birthDate || '');
+  const [photoURL, setPhotoURL] = useState(userProfile?.photoURL || '');
+  const [isSaving, setIsSaving] = useState(false);
 
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        return {
-          ...defaultData,
-          ...parsed,
-          // Ensure arrays exist even if missing in parsed data
-          projects: parsed.projects || defaultData.projects,
-          goals: parsed.goals || defaultData.goals,
-          tasks: (parsed.tasks || defaultData.tasks).map((t: any) => ({
-            ...t,
-            status: t.status || (t.completed ? 'done' : 'todo')
-          })),
-          appointments: (parsed.appointments || defaultData.appointments).map((a: any) => ({
-            ...a,
-            completed: a.completed ?? false
-          })),
-          diet: (parsed.diet || defaultData.diet).map((m: any) => ({
-            ...m,
-            completedDates: m.completedDates || []
-          })),
-          training: (parsed.training || defaultData.training).map((t: any) => ({
-            ...t,
-            completedDates: t.completedDates || []
-          }))
-        };
-      } catch (e) {
-        console.error("Error parsing saved data", e);
-        return defaultData;
-      }
+  useEffect(() => {
+    if (userProfile) {
+      setName(userProfile.displayName || '');
+      setBirthDate(userProfile.birthDate || '');
+      setPhotoURL(userProfile.photoURL || '');
     }
-    return defaultData;
+  }, [userProfile]);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await updateProfile({ displayName: name, birthDate, photoURL });
+      onClose();
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
+      >
+        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+          <h2 className="text-xl font-bold text-slate-800">Meu Perfil</h2>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+            <X size={20} className="text-slate-400" />
+          </button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="flex justify-center mb-6">
+            <div className="relative group">
+              <div className="w-24 h-24 bg-orange-100 rounded-3xl flex items-center justify-center text-orange-600 overflow-hidden border-4 border-white shadow-lg">
+                {photoURL ? (
+                  <img src={photoURL} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                ) : (
+                  <UserIcon size={40} />
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-400 uppercase ml-1">Nome Completo</label>
+            <input 
+              type="text" 
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
+              placeholder="Seu nome"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-400 uppercase ml-1">Email</label>
+            <input 
+              type="email" 
+              value={userProfile?.email || ''}
+              disabled
+              className="w-full px-4 py-3 bg-slate-100 border border-slate-200 rounded-2xl text-slate-500 cursor-not-allowed"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-400 uppercase ml-1">Data de Nascimento</label>
+            <input 
+              type="date" 
+              value={birthDate}
+              onChange={(e) => setBirthDate(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-400 uppercase ml-1">URL da Foto</label>
+            <input 
+              type="text" 
+              value={photoURL}
+              onChange={(e) => setPhotoURL(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
+              placeholder="https://exemplo.com/foto.jpg"
+            />
+          </div>
+        </div>
+        <div className="p-6 bg-slate-50 flex gap-3">
+          <button 
+            onClick={onClose}
+            className="flex-1 py-3 px-4 bg-white border border-slate-200 text-slate-600 font-bold rounded-2xl hover:bg-slate-100 transition-all"
+          >
+            Cancelar
+          </button>
+          <button 
+            onClick={handleSave}
+            disabled={isSaving}
+            className="flex-1 py-3 px-4 bg-orange-600 text-white font-bold rounded-2xl hover:bg-orange-700 shadow-lg shadow-orange-200 transition-all flex items-center justify-center gap-2"
+          >
+            {isSaving ? <Loader2 size={20} className="animate-spin" /> : 'Salvar Alterações'}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+function MainApp() {
+  const { user, userProfile, loading, logout, isAdmin } = useAuth();
+  const [data, setData] = useState<AppData>({
+    projects: [],
+    goals: [],
+    tasks: [],
+    appointments: [],
+    diet: [],
+    training: []
   });
+
+  // Firestore Sync
+  useEffect(() => {
+    if (!user) return;
+
+    const collections = ['projects', 'goals', 'tasks', 'appointments', 'diet', 'training'];
+    const unsubscribes: (() => void)[] = [];
+
+    collections.forEach(colName => {
+      const q = isAdmin 
+        ? query(collection(db, colName))
+        : query(collection(db, colName), where('userId', '==', user.uid));
+
+      const unsub = onSnapshot(q, (snapshot) => {
+        const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as any[];
+        setData(prev => ({ ...prev, [colName]: items }));
+      });
+      unsubscribes.push(unsub);
+    });
+
+    return () => unsubscribes.forEach(unsub => unsub());
+  }, [user, isAdmin]);
 
   const [activeView, setActiveView] = useState<'dashboard' | 'calendar' | 'finance' | 'diet' | 'studies' | 'vision'>('dashboard');
   const [taskViewMode, setTaskViewMode] = useState<'list' | 'kanban'>('list');
@@ -111,6 +231,7 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isSidebarPinned, setIsSidebarPinned] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -125,8 +246,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }, [data]);
+    if (!activeProjectId && data.projects.length > 0) {
+      setActiveProjectId(data.projects[0].id);
+    }
+  }, [data.projects, activeProjectId]);
 
   const activeProject = useMemo(() => 
     data.projects.find(p => p.id === activeProjectId), 
@@ -144,109 +267,97 @@ export default function App() {
     return data.tasks.filter(t => goalIds.includes(t.goalId));
   }, [data.tasks, activeGoalId, projectGoals]);
 
-  const addProject = () => {
-    if (!newProjectTitle.trim()) return;
-    const newProject: Project = {
-      id: generateId(),
+  const addProject = async () => {
+    if (!newProjectTitle.trim() || !user) return;
+    const newProject = {
       title: newProjectTitle,
       color: '#' + Math.floor(Math.random()*16777215).toString(16),
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      userId: user.uid
     };
-    setData(prev => ({ ...prev, projects: [...prev.projects, newProject] }));
+    await addDoc(collection(db, 'projects'), newProject);
     setNewProjectTitle('');
     setShowAddProject(false);
-    setActiveProjectId(newProject.id);
     setActiveView('dashboard');
     if (isMobile) setIsSidebarOpen(false);
   };
 
-  const addGoal = () => {
-    if (!newGoalTitle.trim() || !activeProjectId) return;
-    const newGoal: Goal = {
-      id: generateId(),
+  const addGoal = async () => {
+    if (!newGoalTitle.trim() || !activeProjectId || !user) return;
+    const newGoal = {
       title: newGoalTitle,
       projectId: activeProjectId,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      userId: user.uid
     };
-    setData(prev => ({ ...prev, goals: [...prev.goals, newGoal] }));
+    await addDoc(collection(db, 'goals'), newGoal);
     setNewGoalTitle('');
     setShowAddGoal(false);
-    setActiveGoalId(newGoal.id);
   };
 
-  const addTask = () => {
-    if (!newTaskTitle.trim() || !activeGoalId) return;
-    const newTask: Task = {
-      id: generateId(),
+  const addTask = async () => {
+    if (!newTaskTitle.trim() || !activeGoalId || !user) return;
+    const newTask = {
       title: newTaskTitle,
       completed: false,
       status: 'todo',
       goalId: activeGoalId,
       createdAt: Date.now(),
-      dueDate: newTaskDate || undefined
+      dueDate: newTaskDate || null,
+      userId: user.uid
     };
-    setData(prev => ({ ...prev, tasks: [...prev.tasks, newTask] }));
+    await addDoc(collection(db, 'tasks'), newTask);
     setNewTaskTitle('');
     setNewTaskDate('');
   };
 
-  const saveEditTask = () => {
+  const saveEditTask = async () => {
     if (!editingTaskId || !editTaskTitle.trim()) return;
-    setData(prev => ({
-      ...prev,
-      tasks: prev.tasks.map(t => 
-        t.id === editingTaskId 
-          ? { ...t, title: editTaskTitle, dueDate: editTaskDate || undefined } 
-          : t
-      )
-    }));
+    await updateDoc(doc(db, 'tasks', editingTaskId), {
+      title: editTaskTitle,
+      dueDate: editTaskDate || null
+    });
     setEditingTaskId(null);
   };
 
-  const toggleTask = (taskId: string) => {
-    setData(prev => ({
-      ...prev,
-      tasks: prev.tasks.map(t => {
-        if (t.id === taskId) {
-          const completed = !t.completed;
-          return { ...t, completed, status: completed ? 'done' : 'todo' };
-        }
-        return t;
-      })
-    }));
+  const toggleTask = async (taskId: string) => {
+    const task = data.tasks.find(t => t.id === taskId);
+    if (!task) return;
+    const completed = !task.completed;
+    await updateDoc(doc(db, 'tasks', taskId), {
+      completed,
+      status: completed ? 'done' : 'todo'
+    });
   };
 
-  const updateTaskStatus = (taskId: string, status: 'todo' | 'in-progress' | 'done') => {
-    setData(prev => ({
-      ...prev,
-      tasks: prev.tasks.map(t => t.id === taskId ? { ...t, status, completed: status === 'done' } : t)
-    }));
+  const updateTaskStatus = async (taskId: string, status: 'todo' | 'in-progress' | 'done') => {
+    await updateDoc(doc(db, 'tasks', taskId), {
+      status,
+      completed: status === 'done'
+    });
   };
 
-  const deleteTask = (taskId: string) => {
-    setData(prev => ({ ...prev, tasks: prev.tasks.filter(t => t.id !== taskId) }));
+  const deleteTask = async (taskId: string) => {
+    await deleteDoc(doc(db, 'tasks', taskId));
   };
 
-  const deleteGoal = (goalId: string) => {
-    setData(prev => ({
-      ...prev,
-      goals: prev.goals.filter(g => g.id !== goalId),
-      tasks: prev.tasks.filter(t => t.goalId !== goalId)
-    }));
+  const deleteGoal = async (goalId: string) => {
+    await deleteDoc(doc(db, 'goals', goalId));
+    // Also delete tasks associated with this goal
+    const tasksToDelete = data.tasks.filter(t => t.goalId === goalId);
+    for (const task of tasksToDelete) {
+      await deleteDoc(doc(db, 'tasks', task.id));
+    }
     if (activeGoalId === goalId) setActiveGoalId(null);
   };
 
-  const deleteProject = (projectId: string) => {
-    if (data.projects.length <= 1) return;
-    setData(prev => {
-      const goalIds = prev.goals.filter(g => g.projectId === projectId).map(g => g.id);
-      return {
-        ...prev,
-        projects: prev.projects.filter(p => p.id !== projectId),
-        goals: prev.goals.filter(g => g.projectId !== projectId),
-        tasks: prev.tasks.filter(t => !goalIds.includes(t.goalId))
-      };
-    });
+  const deleteProject = async (projectId: string) => {
+    await deleteDoc(doc(db, 'projects', projectId));
+    // Associated goals and tasks should be deleted too for consistency
+    const goalsToDelete = data.goals.filter(g => g.projectId === projectId);
+    for (const goal of goalsToDelete) {
+      await deleteGoal(goal.id);
+    }
     if (activeProjectId === projectId) setActiveProjectId(data.projects.find(p => p.id !== projectId)?.id || '');
   };
 
@@ -314,105 +425,124 @@ export default function App() {
     return [...data.appointments, ...projectTasksAsAppointments, ...dietAppointments, ...trainingAppointments];
   }, [data.appointments, data.tasks, data.goals, data.projects, data.diet, data.training]);
 
-  const addAppointments = (appointments: Appointment[]) => {
-    setData(prev => ({ ...prev, appointments: [...prev.appointments, ...appointments] }));
-  };
-
-  const updateAppointment = (appointment: Appointment) => {
-    setData(prev => ({
-      ...prev,
-      appointments: prev.appointments.map(a => a.id === appointment.id ? appointment : a)
-    }));
-  };
-
-  const toggleAppointment = (id: string) => {
-    setData(prev => {
-      // Handle diet virtual appointments
-      if (id.startsWith('diet_')) {
-        const [, mealId, dateStr] = id.split('_');
-        return {
-          ...prev,
-          diet: prev.diet.map(m => {
-            if (m.id === mealId) {
-              const completedDates = m.completedDates || [];
-              const isCompleted = completedDates.includes(dateStr);
-              return {
-                ...m,
-                completedDates: isCompleted 
-                  ? completedDates.filter(d => d !== dateStr)
-                  : [...completedDates, dateStr]
-              };
-            }
-            return m;
-          })
-        };
-      }
-
-      // Handle training virtual appointments
-      if (id.startsWith('training_')) {
-        const [, trainId, dateStr] = id.split('_');
-        return {
-          ...prev,
-          training: prev.training.map(t => {
-            if (t.id === trainId) {
-              const completedDates = t.completedDates || [];
-              const isCompleted = completedDates.includes(dateStr);
-              return {
-                ...t,
-                completedDates: isCompleted 
-                  ? completedDates.filter(d => d !== dateStr)
-                  : [...completedDates, dateStr]
-              };
-            }
-            return t;
-          })
-        };
-      }
-
-      const isTask = prev.tasks.some(t => t.id === id);
-      if (isTask) {
-        return {
-          ...prev,
-          tasks: prev.tasks.map(t => t.id === id ? { ...t, completed: !t.completed } : t)
-        };
-      }
-      return {
-        ...prev,
-        appointments: prev.appointments.map(a => a.id === id ? { ...a, completed: !a.completed } : a)
-      };
+  const addAppointments = async (appointments: Appointment[]) => {
+    if (!user) return;
+    const batch = writeBatch(db);
+    appointments.forEach(app => {
+      const newDoc = doc(collection(db, 'appointments'));
+      batch.set(newDoc, { ...app, userId: user.uid });
     });
+    await batch.commit();
   };
 
-  const deleteAppointment = (id: string, deleteAllRecurring?: boolean) => {
-    setData(prev => {
-      if (deleteAllRecurring) {
-        const target = prev.appointments.find(a => a.id === id);
-        if (target?.recurrenceId) {
-          return {
-            ...prev,
-            appointments: prev.appointments.filter(a => {
-              if (a.recurrenceId === target.recurrenceId) {
-                return a.date < target.date; // Keep past ones
-              }
-              return a.id !== id;
-            })
-          };
+  const updateAppointment = async (appointment: Appointment) => {
+    const { id, ...rest } = appointment;
+    await updateDoc(doc(db, 'appointments', id), rest);
+  };
+
+  const toggleAppointment = async (id: string) => {
+    // Handle diet virtual appointments
+    if (id.startsWith('diet_')) {
+      const [, mealId, dateStr] = id.split('_');
+      const meal = data.diet.find(m => m.id === mealId);
+      if (meal) {
+        const completedDates = meal.completedDates || [];
+        const isCompleted = completedDates.includes(dateStr);
+        const newDates = isCompleted 
+          ? completedDates.filter(d => d !== dateStr)
+          : [...completedDates, dateStr];
+        await updateDoc(doc(db, 'diet', mealId), { completedDates: newDates });
+      }
+      return;
+    }
+
+    // Handle training virtual appointments
+    if (id.startsWith('training_')) {
+      const [, trainId, dateStr] = id.split('_');
+      const train = data.training.find(t => t.id === trainId);
+      if (train) {
+        const completedDates = train.completedDates || [];
+        const isCompleted = completedDates.includes(dateStr);
+        const newDates = isCompleted 
+          ? completedDates.filter(d => d !== dateStr)
+          : [...completedDates, dateStr];
+        await updateDoc(doc(db, 'training', trainId), { completedDates: newDates });
+      }
+      return;
+    }
+
+    const task = data.tasks.find(t => t.id === id);
+    if (task) {
+      await updateDoc(doc(db, 'tasks', id), { completed: !task.completed });
+      return;
+    }
+
+    const app = data.appointments.find(a => a.id === id);
+    if (app) {
+      await updateDoc(doc(db, 'appointments', id), { completed: !app.completed });
+    }
+  };
+
+  const deleteAppointment = async (id: string, deleteAllRecurring?: boolean) => {
+    if (deleteAllRecurring) {
+      const target = data.appointments.find(a => a.id === id);
+      if (target?.recurrenceId) {
+        const appsToDelete = data.appointments.filter(a => a.recurrenceId === target.recurrenceId && a.date >= target.date);
+        for (const app of appsToDelete) {
+          await deleteDoc(doc(db, 'appointments', app.id));
         }
+        return;
       }
-      return { ...prev, appointments: prev.appointments.filter(a => a.id !== id) };
-    });
+    }
+    await deleteDoc(doc(db, 'appointments', id));
   };
 
-  const updateDiet = (diet: MealEntry[]) => {
-    setData(prev => ({ ...prev, diet }));
+  const updateDiet = async (dietList: MealEntry[]) => {
+    if (!user) return;
+    // This is a bit complex because we are updating the whole list.
+    // In a real app, we'd have add/update/delete for meals.
+    // For now, let's assume we are adding/updating individual ones.
+    // But since the component expects onUpdateDiet, we'll compare.
+    const currentIds = data.diet.map(m => m.id);
+    for (const meal of dietList) {
+      if (currentIds.includes(meal.id)) {
+        const { id, ...rest } = meal;
+        await updateDoc(doc(db, 'diet', id), rest);
+      } else {
+        await addDoc(collection(db, 'diet'), { ...meal, userId: user.uid });
+      }
+    }
   };
 
-  const updateTraining = (training: TrainingEntry[]) => {
-    setData(prev => ({ ...prev, training }));
+  const updateTraining = async (trainingList: TrainingEntry[]) => {
+    if (!user) return;
+    const currentIds = data.training.map(t => t.id);
+    for (const train of trainingList) {
+      if (currentIds.includes(train.id)) {
+        const { id, ...rest } = train;
+        await updateDoc(doc(db, 'training', id), rest);
+      } else {
+        await addDoc(collection(db, 'training'), { ...train, userId: user.uid });
+      }
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Loader2 className="w-10 h-10 text-orange-600 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Login />;
+  }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex overflow-hidden">
+    <div className="h-screen bg-slate-50 flex overflow-hidden relative">
+      <ProfileModal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
+      
       {/* Mobile Overlay */}
       <AnimatePresence>
         {isMobile && isSidebarOpen && (
@@ -421,7 +551,7 @@ export default function App() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setIsSidebarOpen(false)}
-            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 lg:hidden"
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40"
           />
         )}
       </AnimatePresence>
@@ -435,8 +565,8 @@ export default function App() {
           opacity: isSidebarOpen ? 1 : (isMobile ? 0 : 0)
         }}
         className={cn(
-          "bg-white border-r border-slate-200 flex flex-col h-screen sticky top-0 z-50 overflow-hidden shrink-0",
-          isMobile && "fixed left-0 shadow-2xl"
+          "bg-white border-r border-slate-200 flex flex-col h-full z-50 overflow-hidden shrink-0 transition-all duration-300",
+          isMobile && "fixed left-0 top-0 shadow-2xl"
         )}
       >
         <div className="p-6 border-b border-slate-100 flex items-center justify-between min-w-[288px]">
@@ -687,6 +817,35 @@ export default function App() {
             </div>
           )}
         </nav>
+
+        {/* User Profile at Bottom */}
+        <div className="p-4 border-t border-slate-100 w-[288px]">
+          <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-100">
+            <button 
+              onClick={() => setShowProfileModal(true)}
+              className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center text-orange-600 overflow-hidden hover:ring-2 hover:ring-orange-500 transition-all"
+            >
+              {userProfile?.photoURL ? (
+                <img src={userProfile.photoURL} alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              ) : (
+                <UserIcon size={20} />
+              )}
+            </button>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-slate-800 truncate">{userProfile?.displayName || 'Usuário'}</p>
+              <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider truncate">
+                {isAdmin ? 'Administrador' : 'Membro'}
+              </p>
+            </div>
+            <button 
+              onClick={() => logout()}
+              className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+              title="Sair"
+            >
+              <LogOut size={18} />
+            </button>
+          </div>
+        </div>
       </motion.aside>
 
       {/* Main Content */}
@@ -1023,5 +1182,13 @@ export default function App() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <MainApp />
+    </AuthProvider>
   );
 }
