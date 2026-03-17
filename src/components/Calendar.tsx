@@ -169,38 +169,55 @@ export const Calendar: React.FC<CalendarProps> = ({
     console.log('Submitting appointment for date:', selectedDate);
 
     if (editingAppointment) {
-      onUpdateAppointment({
+      const updatedApp: Appointment = {
         ...editingAppointment,
         title: newTitle,
-        description: newDesc,
+        description: newDesc || '',
         time: newTime,
         category: newCategory,
         date: format(selectedDate, 'yyyy-MM-dd'),
-        recurrence: recurrenceType !== 'none' ? {
-          type: recurrenceType,
-          daysOfWeek: recurrenceType === 'custom' ? customDays : recurrenceType === 'weekly' ? [getDay(selectedDate)] : undefined
-        } : undefined
-      });
+        completed: editingAppointment.completed || false,
+      };
+
+      if (recurrenceType !== 'none') {
+        updatedApp.recurrence = { type: recurrenceType };
+        if (recurrenceType === 'custom') {
+          updatedApp.recurrence.daysOfWeek = customDays;
+        } else if (recurrenceType === 'weekly') {
+          updatedApp.recurrence.daysOfWeek = [getDay(selectedDate)];
+        }
+      } else {
+        delete updatedApp.recurrence;
+      }
+
+      onUpdateAppointment(updatedApp);
     } else {
       // Create instances based on recurrence
       const instances: Appointment[] = [];
       const baseId = generateId();
       
       const createInstance = (date: Date) => {
-        return {
+        const app: any = {
           id: generateId(),
           title: newTitle,
-          description: newDesc,
+          description: newDesc || '',
           date: format(date, 'yyyy-MM-dd'),
           time: newTime,
           category: newCategory,
           completed: false,
-          recurrence: recurrenceType !== 'none' ? {
-            type: recurrenceType,
-            daysOfWeek: recurrenceType === 'custom' ? customDays : recurrenceType === 'weekly' ? [getDay(selectedDate)] : undefined
-          } : undefined,
           createdAt: Date.now()
         };
+        
+        if (recurrenceType !== 'none') {
+          app.recurrence = { type: recurrenceType };
+          if (recurrenceType === 'custom') {
+            app.recurrence.daysOfWeek = customDays;
+          } else if (recurrenceType === 'weekly') {
+            app.recurrence.daysOfWeek = [getDay(selectedDate)];
+          }
+        }
+        
+        return app as Appointment;
       };
 
       if (recurrenceType === 'none') {

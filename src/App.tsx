@@ -529,8 +529,13 @@ function MainApp() {
     try {
       const batch = writeBatch(db);
       appointments.forEach(app => {
-        const newDoc = doc(collection(db, 'appointments'));
-        batch.set(newDoc, { ...app, userId: user.uid });
+        // Use the app.id as the document ID for consistency
+        const newDoc = doc(db, 'appointments', app.id);
+        
+        // Clean up undefined values for Firestore
+        const cleanApp = JSON.parse(JSON.stringify({ ...app, userId: user.uid }));
+        
+        batch.set(newDoc, cleanApp);
       });
       await batch.commit();
       showToast('Agenda atualizada!');
@@ -541,8 +546,16 @@ function MainApp() {
   };
 
   const updateAppointment = async (appointment: Appointment) => {
-    const { id, ...rest } = appointment;
-    await updateDoc(doc(db, 'appointments', id), rest);
+    if (!user) return;
+    try {
+      const { id, ...rest } = appointment;
+      const cleanData = JSON.parse(JSON.stringify(rest));
+      await updateDoc(doc(db, 'appointments', id), cleanData);
+      showToast('Compromisso atualizado!');
+    } catch (error) {
+      console.error('Error updating appointment:', error);
+      showToast('Erro ao atualizar compromisso', 'error');
+    }
   };
 
   const toggleAppointment = async (id: string) => {
