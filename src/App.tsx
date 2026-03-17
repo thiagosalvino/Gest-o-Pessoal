@@ -719,7 +719,7 @@ function MainApp() {
             <div className="w-8 h-8 bg-orange-600 rounded-lg flex items-center justify-center text-white">
               <Settings2 size={18} />
             </div>
-            <span className="text-black">GestorPessoal</span><span className="text-orange-600">App</span>
+            <span className="text-black">Organize</span><span className="text-orange-600">App</span>
           </h1>
           {!isMobile && (
             <button
