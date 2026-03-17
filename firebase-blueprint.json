@@ -8,7 +8,11 @@
         "uid": { "type": "string", "description": "Firebase Auth UID" },
         "email": { "type": "string", "description": "User email" },
         "role": { "type": "string", "enum": ["admin", "user"], "description": "User role (admin can see everything)" },
-        "displayName": { "type": "string", "description": "User display name" }
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected", "blocked"], "description": "User approval status" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "birthDate": { "type": "string", "description": "User date of birth" },
+        "createdAt": { "type": "string", "description": "Registration date" },
+        "lastLogin": { "type": "string", "description": "Last login date" }
       },
       "required": ["uid", "email", "role"]
     },

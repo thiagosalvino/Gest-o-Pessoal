@@ -19,6 +19,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   updateProfile: (data: { displayName?: string; birthDate?: string; photoURL?: string }) => Promise<void>;
   isAdmin: boolean;
+  isApproved: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -37,15 +38,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (firebaseUser) {
         const profileDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
         if (profileDoc.exists()) {
-          setUserProfile(profileDoc.data());
+          // Update last login
+          const lastLogin = new Date().toISOString();
+          await setDoc(doc(db, 'users', firebaseUser.uid), { lastLogin }, { merge: true });
+          setUserProfile({ ...profileDoc.data(), lastLogin });
         } else {
           // Create profile if it doesn't exist (e.g. first login)
           const role = firebaseUser.email === 'administrador@app.com' || firebaseUser.email === 'thiagosalvinots2020@gmail.com' ? 'admin' : 'user';
+          const status = role === 'admin' ? 'approved' : 'pending';
           const newProfile = {
             uid: firebaseUser.uid,
             email: firebaseUser.email,
             role,
-            displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Usuário'
+            status,
+            displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Usuário',
+            createdAt: new Date().toISOString(),
+            lastLogin: new Date().toISOString()
           };
           await setDoc(doc(db, 'users', firebaseUser.uid), newProfile);
           setUserProfile(newProfile);
@@ -108,15 +116,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const profileDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
     if (!profileDoc.exists()) {
       const role = firebaseUser.email === 'thiagosalvinots2020@gmail.com' ? 'admin' : 'user';
+      const status = role === 'admin' ? 'approved' : 'pending';
       const newProfile = {
         uid: firebaseUser.uid,
         email: firebaseUser.email,
         role,
+        status,
         displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Usuário',
-        photoURL: firebaseUser.photoURL || ''
+        photoURL: firebaseUser.photoURL || '',
+        createdAt: new Date().toISOString(),
+        lastLogin: new Date().toISOString()
       };
       await setDoc(doc(db, 'users', firebaseUser.uid), newProfile);
       setUserProfile(newProfile);
+    } else {
+      // Update last login
+      const lastLogin = new Date().toISOString();
+      await setDoc(doc(db, 'users', firebaseUser.uid), { lastLogin }, { merge: true });
+      setUserProfile((prev: any) => ({ ...prev, lastLogin }));
     }
   };
 
@@ -132,9 +149,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const isAdmin = userProfile?.role === 'admin';
+  const isApproved = userProfile?.status === 'approved' || isAdmin;
 
   return (
-    <AuthContext.Provider value={{ user, userProfile, loading, login, loginWithGoogle, logout, updateProfile, isAdmin }}>
+    <AuthContext.Provider value={{ user, userProfile, loading, login, loginWithGoogle, logout, updateProfile, isAdmin, isApproved }}>
       {children}
     </AuthContext.Provider>
   );

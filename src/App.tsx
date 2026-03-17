@@ -28,7 +28,10 @@ import {
   Utensils,
   LogOut,
   User as UserIcon,
-  Loader2
+  Loader2,
+  Users,
+  Shield,
+  Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -51,6 +54,75 @@ import { KanbanBoard } from './components/KanbanBoard';
 import { DietTraining } from './components/DietTraining';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Login } from './components/Login';
+import { UserManagement } from './components/UserManagement';
+import { 
+  AlertCircle,
+  Clock as ClockIcon,
+  Ban,
+  XCircle
+} from 'lucide-react';
+
+const PendingApproval = ({ status, onLogout }: { status: string; onLogout: () => void }) => {
+  const getStatusConfig = () => {
+    switch (status) {
+      case 'rejected':
+        return {
+          icon: <XCircle size={48} className="text-red-500" />,
+          title: 'Acesso Negado',
+          message: 'Infelizmente seu cadastro não foi aprovado pelos administradores.',
+          color: 'bg-red-50 text-red-700 border-red-200'
+        };
+      case 'blocked':
+        return {
+          icon: <Ban size={48} className="text-slate-500" />,
+          title: 'Conta Bloqueada',
+          message: 'Sua conta foi bloqueada. Entre em contato com o suporte para mais informações.',
+          color: 'bg-slate-50 text-slate-700 border-slate-200'
+        };
+      default:
+        return {
+          icon: <ClockIcon size={48} className="text-orange-500" />,
+          title: 'Aguardando Aprovação',
+          message: 'Seu cadastro foi recebido e está aguardando a análise de um administrador.',
+          color: 'bg-orange-50 text-orange-700 border-orange-200'
+        };
+    }
+  };
+
+  const config = getStatusConfig();
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full text-center border border-slate-100"
+      >
+        <div className="flex justify-center mb-6">
+          <div className="p-4 bg-slate-50 rounded-2xl">
+            {config.icon}
+          </div>
+        </div>
+        <h2 className="text-2xl font-black text-slate-800 mb-3">{config.title}</h2>
+        <p className="text-slate-500 font-medium mb-8 leading-relaxed">
+          {config.message}
+        </p>
+        
+        <div className={cn("p-4 rounded-2xl border mb-8 text-sm font-bold", config.color)}>
+          Status: {status === 'pending' ? 'Pendente' : status === 'rejected' ? 'Reprovado' : 'Bloqueado'}
+        </div>
+
+        <button
+          onClick={onLogout}
+          className="w-full flex items-center justify-center gap-2 px-6 py-3.5 bg-slate-800 hover:bg-slate-900 text-white rounded-2xl font-bold transition-all shadow-lg hover:shadow-xl"
+        >
+          <LogOut size={20} />
+          Sair da Conta
+        </button>
+      </motion.div>
+    </div>
+  );
+};
 
 import { 
   collection, 
@@ -183,7 +255,7 @@ const ProfileModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
 };
 
 function MainApp() {
-  const { user, userProfile, loading, logout, isAdmin } = useAuth();
+  const { user, userProfile, loading, logout, isAdmin, isApproved } = useAuth();
   const [data, setData] = useState<AppData>({
     projects: [],
     goals: [],
@@ -215,7 +287,19 @@ function MainApp() {
     return () => unsubscribes.forEach(unsub => unsub());
   }, [user, isAdmin]);
 
-  const [activeView, setActiveView] = useState<'dashboard' | 'calendar' | 'finance' | 'diet' | 'studies' | 'vision'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'calendar' | 'finance' | 'diet' | 'studies' | 'vision' | 'users'>('dashboard');
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+  useEffect(() => {
+    if (activeView === 'users' && !isAdmin && !loading) {
+      setActiveView('dashboard');
+    }
+  }, [activeView, isAdmin, loading]);
+
   const [taskViewMode, setTaskViewMode] = useState<'list' | 'kanban'>('list');
   const [activeProjectId, setActiveProjectId] = useState<string>(data.projects[0]?.id || '');
   const [activeGoalId, setActiveGoalId] = useState<string | null>(null);
@@ -236,9 +320,13 @@ function MainApp() {
   useEffect(() => {
     const checkMobile = () => {
       const mobile = window.innerWidth < 1024;
-      setIsMobile(mobile);
-      if (mobile) setIsSidebarOpen(false);
-      else setIsSidebarOpen(true);
+      setIsMobile(prevMobile => {
+        // Only auto-toggle sidebar if the mobile status actually changed
+        if (prevMobile !== mobile) {
+          setIsSidebarOpen(!mobile);
+        }
+        return mobile;
+      });
     };
     checkMobile();
     window.addEventListener('resize', checkMobile);
@@ -269,30 +357,40 @@ function MainApp() {
 
   const addProject = async () => {
     if (!newProjectTitle.trim() || !user) return;
-    const newProject = {
-      title: newProjectTitle,
-      color: '#' + Math.floor(Math.random()*16777215).toString(16),
-      createdAt: Date.now(),
-      userId: user.uid
-    };
-    await addDoc(collection(db, 'projects'), newProject);
-    setNewProjectTitle('');
-    setShowAddProject(false);
-    setActiveView('dashboard');
-    if (isMobile) setIsSidebarOpen(false);
+    try {
+      const newProject = {
+        title: newProjectTitle,
+        color: '#' + Math.floor(Math.random()*16777215).toString(16),
+        createdAt: Date.now(),
+        userId: user.uid
+      };
+      await addDoc(collection(db, 'projects'), newProject);
+      setNewProjectTitle('');
+      setShowAddProject(false);
+      setActiveView('dashboard');
+      if (isMobile) setIsSidebarOpen(false);
+      showToast('Projeto criado com sucesso!');
+    } catch (error) {
+      showToast('Erro ao criar projeto', 'error');
+    }
   };
 
   const addGoal = async () => {
     if (!newGoalTitle.trim() || !activeProjectId || !user) return;
-    const newGoal = {
-      title: newGoalTitle,
-      projectId: activeProjectId,
-      createdAt: Date.now(),
-      userId: user.uid
-    };
-    await addDoc(collection(db, 'goals'), newGoal);
-    setNewGoalTitle('');
-    setShowAddGoal(false);
+    try {
+      const newGoal = {
+        title: newGoalTitle,
+        projectId: activeProjectId,
+        createdAt: Date.now(),
+        userId: user.uid
+      };
+      await addDoc(collection(db, 'goals'), newGoal);
+      setNewGoalTitle('');
+      setShowAddGoal(false);
+      showToast('Meta criada com sucesso!');
+    } catch (error) {
+      showToast('Erro ao criar meta', 'error');
+    }
   };
 
   const addTask = async () => {
@@ -427,12 +525,17 @@ function MainApp() {
 
   const addAppointments = async (appointments: Appointment[]) => {
     if (!user) return;
-    const batch = writeBatch(db);
-    appointments.forEach(app => {
-      const newDoc = doc(collection(db, 'appointments'));
-      batch.set(newDoc, { ...app, userId: user.uid });
-    });
-    await batch.commit();
+    try {
+      const batch = writeBatch(db);
+      appointments.forEach(app => {
+        const newDoc = doc(collection(db, 'appointments'));
+        batch.set(newDoc, { ...app, userId: user.uid });
+      });
+      await batch.commit();
+      showToast('Agenda atualizada!');
+    } catch (error) {
+      showToast('Erro ao salvar agenda', 'error');
+    }
   };
 
   const updateAppointment = async (appointment: Appointment) => {
@@ -499,31 +602,57 @@ function MainApp() {
 
   const updateDiet = async (dietList: MealEntry[]) => {
     if (!user) return;
-    // This is a bit complex because we are updating the whole list.
-    // In a real app, we'd have add/update/delete for meals.
-    // For now, let's assume we are adding/updating individual ones.
-    // But since the component expects onUpdateDiet, we'll compare.
-    const currentIds = data.diet.map(m => m.id);
-    for (const meal of dietList) {
-      if (currentIds.includes(meal.id)) {
-        const { id, ...rest } = meal;
-        await updateDoc(doc(db, 'diet', id), rest);
-      } else {
-        await addDoc(collection(db, 'diet'), { ...meal, userId: user.uid });
+    try {
+      const currentIds = data.diet.map(m => m.id);
+      const newIds = dietList.map(m => m.id);
+
+      // Delete removed meals
+      for (const id of currentIds) {
+        if (!newIds.includes(id)) {
+          await deleteDoc(doc(db, 'diet', id));
+        }
       }
+
+      // Add or update meals
+      for (const meal of dietList) {
+        if (currentIds.includes(meal.id)) {
+          const { id, ...rest } = meal;
+          await updateDoc(doc(db, 'diet', id), rest);
+        } else {
+          await addDoc(collection(db, 'diet'), { ...meal, userId: user.uid });
+        }
+      }
+      showToast('Dieta salva com sucesso!');
+    } catch (error) {
+      showToast('Erro ao salvar dieta', 'error');
     }
   };
 
   const updateTraining = async (trainingList: TrainingEntry[]) => {
     if (!user) return;
-    const currentIds = data.training.map(t => t.id);
-    for (const train of trainingList) {
-      if (currentIds.includes(train.id)) {
-        const { id, ...rest } = train;
-        await updateDoc(doc(db, 'training', id), rest);
-      } else {
-        await addDoc(collection(db, 'training'), { ...train, userId: user.uid });
+    try {
+      const currentIds = data.training.map(t => t.id);
+      const newIds = trainingList.map(t => t.id);
+
+      // Delete removed trainings
+      for (const id of currentIds) {
+        if (!newIds.includes(id)) {
+          await deleteDoc(doc(db, 'training', id));
+        }
       }
+
+      // Add or update trainings
+      for (const train of trainingList) {
+        if (currentIds.includes(train.id)) {
+          const { id, ...rest } = train;
+          await updateDoc(doc(db, 'training', id), rest);
+        } else {
+          await addDoc(collection(db, 'training'), { ...train, userId: user.uid });
+        }
+      }
+      showToast('Treino salvo com sucesso!');
+    } catch (error) {
+      showToast('Erro ao salvar treino', 'error');
     }
   };
 
@@ -539,6 +668,10 @@ function MainApp() {
     return <Login />;
   }
 
+  if (!isApproved) {
+    return <PendingApproval status={userProfile?.status || 'pending'} onLogout={logout} />;
+  }
+
   return (
     <div className="h-screen bg-slate-50 flex overflow-hidden relative">
       <ProfileModal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
@@ -550,6 +683,7 @@ function MainApp() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
             onClick={() => setIsSidebarOpen(false)}
             className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40"
           />
@@ -564,8 +698,14 @@ function MainApp() {
           x: isSidebarOpen ? 0 : (isMobile ? -288 : 0),
           opacity: isSidebarOpen ? 1 : (isMobile ? 0 : 0)
         }}
+        transition={{ 
+          type: "spring", 
+          stiffness: 400, 
+          damping: 35,
+          opacity: { duration: 0.2 }
+        }}
         className={cn(
-          "bg-white border-r border-slate-200 flex flex-col h-full z-50 overflow-hidden shrink-0 transition-all duration-300",
+          "bg-white border-r border-slate-200 flex flex-col h-full z-50 overflow-hidden shrink-0",
           isMobile && "fixed left-0 top-0 shadow-2xl"
         )}
       >
@@ -677,6 +817,23 @@ function MainApp() {
               <Dumbbell size={18} />
               Dieta & Treino
             </button>
+            {isAdmin && (
+              <button
+                onClick={() => {
+                  setActiveView('users');
+                  if (isMobile) setIsSidebarOpen(false);
+                }}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all mt-1",
+                  activeView === 'users' 
+                    ? "bg-indigo-50 text-indigo-700" 
+                    : "text-slate-600 hover:bg-slate-50"
+                )}
+              >
+                <Users size={18} />
+                Usuários
+              </button>
+            )}
           </div>
 
           <div>
@@ -704,9 +861,16 @@ function MainApp() {
                       value={newProjectTitle}
                       onChange={(e) => setNewProjectTitle(e.target.value)}
                       placeholder="Nome do projeto..."
-                      className="w-full text-sm p-2 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      className="flex-1 text-sm p-2 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
                       onKeyDown={(e) => e.key === 'Enter' && addProject()}
+                      autoFocus
                     />
+                    <button 
+                      onClick={addProject}
+                      className="p-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 transition-colors"
+                    >
+                      <Check size={16} />
+                    </button>
                   </div>
                 </motion.div>
               )}
@@ -769,10 +933,16 @@ function MainApp() {
                         value={newGoalTitle}
                         onChange={(e) => setNewGoalTitle(e.target.value)}
                         placeholder="Nova meta..."
-                        className="w-full text-sm p-2 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        className="flex-1 text-sm p-2 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
                         onKeyDown={(e) => e.key === 'Enter' && addGoal()}
                         autoFocus
                       />
+                      <button 
+                        onClick={addGoal}
+                        className="p-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 transition-colors"
+                      >
+                        <Check size={16} />
+                      </button>
                     </div>
                   </motion.div>
                 )}
@@ -870,12 +1040,18 @@ function MainApp() {
           </div>
         </div>
 
-        {/* Desktop Retract Toggle */}
-        <div 
-          className={cn(
-            "hidden lg:flex fixed bottom-8 z-50 transition-all duration-300",
-            isSidebarOpen ? "left-[320px]" : "left-8"
-          )}
+        {/* Desktop/Mobile Retract Toggle */}
+        <motion.div 
+          initial={false}
+          animate={{ 
+            left: isSidebarOpen ? 320 : 32
+          }}
+          transition={{ 
+            type: "spring", 
+            stiffness: 400, 
+            damping: 35 
+          }}
+          className="fixed bottom-8 z-50 hidden lg:flex"
         >
           <button 
             onClick={(e) => {
@@ -886,7 +1062,7 @@ function MainApp() {
           >
             {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
-        </div>
+        </motion.div>
 
         <div className="max-w-5xl mx-auto p-4 md:p-8">
           {activeView === 'vision' ? (
@@ -922,6 +1098,8 @@ function MainApp() {
               onUpdateDiet={updateDiet} 
               onUpdateTraining={updateTraining} 
             />
+          ) : (activeView === 'users' && isAdmin) ? (
+            <UserManagement />
           ) : activeView === 'finance' ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <div className="w-24 h-24 bg-orange-100 rounded-full flex items-center justify-center mb-6 text-orange-500">
@@ -1181,6 +1359,23 @@ function MainApp() {
           )}
         </div>
       </main>
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className={cn(
+              "fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-2xl shadow-2xl font-bold text-white flex items-center gap-2",
+              toast.type === 'success' ? "bg-emerald-500" : "bg-red-500"
+            )}
+          >
+            {toast.type === 'success' ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+            {toast.message}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

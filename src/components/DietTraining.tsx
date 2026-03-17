@@ -58,6 +58,7 @@ export const DietTraining: React.FC<DietTrainingProps> = ({
   const [expandedDays, setExpandedDays] = useState<number[]>([new Date().getDay()]);
   const [minimizedSections, setMinimizedSections] = useState<Record<string, boolean>>({});
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [localItemData, setLocalItemData] = useState<{ description: string, quantity: number, unit: any } | null>(null);
   const [showMealModal, setShowMealModal] = useState<{ day: number, editingEntry?: MealEntry } | null>(null);
   const [showTrainingModal, setShowTrainingModal] = useState<{ day: number, editingEntry?: TrainingEntry } | null>(null);
   const [replicateModal, setReplicateModal] = useState<{ type: 'meal' | 'training', entry: any } | null>(null);
@@ -118,46 +119,52 @@ export const DietTraining: React.FC<DietTrainingProps> = ({
 
   const handleAddItemToMeal = (mealId: string) => {
     const newItemId = generateId();
+    const newItem = { id: newItemId, description: '', quantity: 0, unit: '-' as MealUnit };
     onUpdateDiet(diet.map(m => {
       if (m.id === mealId) {
         return {
           ...m,
-          items: [...m.items, { id: newItemId, description: '', quantity: 0, unit: '-' }]
+          items: [...m.items, newItem]
         };
       }
       return m;
     }));
     setEditingItemId(newItemId);
+    setLocalItemData({ description: newItem.description, quantity: newItem.quantity, unit: newItem.unit });
   };
 
   const handleUpdateMealItem = (mealId: string, itemId: string, updates: Partial<MealItem>) => {
-    onUpdateDiet(diet.map(m => {
-      if (m.id === mealId) {
-        return {
-          ...m,
-          items: m.items.map(item => item.id === itemId ? { ...item, ...updates } : item)
-        };
-      }
-      return m;
-    }));
+    if (localItemData) {
+      setLocalItemData(prev => prev ? { ...prev, ...updates } : null);
+    }
   };
 
   const handleBlurMealItem = (mealId: string, itemId: string) => {
-    const meal = diet.find(m => m.id === mealId);
-    const item = meal?.items.find(i => i.id === itemId);
-    
-    if (item && item.description.trim() === '') {
-      onUpdateDiet(diet.map(m => {
-        if (m.id === mealId) {
-          return {
-            ...m,
-            items: m.items.filter(i => i.id !== itemId)
-          };
-        }
-        return m;
-      }));
+    if (localItemData) {
+      if (localItemData.description.trim() === '') {
+        onUpdateDiet(diet.map(m => {
+          if (m.id === mealId) {
+            return {
+              ...m,
+              items: m.items.filter(i => i.id !== itemId)
+            };
+          }
+          return m;
+        }));
+      } else {
+        onUpdateDiet(diet.map(m => {
+          if (m.id === mealId) {
+            return {
+              ...m,
+              items: m.items.map(item => item.id === itemId ? { ...item, ...localItemData } : item)
+            };
+          }
+          return m;
+        }));
+      }
     }
     setEditingItemId(null);
+    setLocalItemData(null);
   };
 
   const handleDeleteMealItem = (mealId: string, itemId: string) => {
@@ -174,46 +181,52 @@ export const DietTraining: React.FC<DietTrainingProps> = ({
 
   const handleAddItemToTraining = (trainingId: string) => {
     const newItemId = generateId();
+    const newItem = { id: newItemId, description: '', quantity: 0, unit: '-' as TrainingUnit };
     onUpdateTraining(training.map(t => {
       if (t.id === trainingId) {
         return {
           ...t,
-          items: [...t.items, { id: newItemId, description: '', quantity: 0, unit: '-' }]
+          items: [...t.items, newItem]
         };
       }
       return t;
     }));
     setEditingItemId(newItemId);
+    setLocalItemData({ description: newItem.description, quantity: newItem.quantity, unit: newItem.unit });
   };
 
   const handleUpdateTrainingItem = (trainingId: string, itemId: string, updates: Partial<TrainingItem>) => {
-    onUpdateTraining(training.map(t => {
-      if (t.id === trainingId) {
-        return {
-          ...t,
-          items: t.items.map(item => item.id === itemId ? { ...item, ...updates } : item)
-        };
-      }
-      return t;
-    }));
+    if (localItemData) {
+      setLocalItemData(prev => prev ? { ...prev, ...updates } : null);
+    }
   };
 
   const handleBlurTrainingItem = (trainingId: string, itemId: string) => {
-    const train = training.find(t => t.id === trainingId);
-    const item = train?.items.find(i => i.id === itemId);
-    
-    if (item && item.description.trim() === '') {
-      onUpdateTraining(training.map(t => {
-        if (t.id === trainingId) {
-          return {
-            ...t,
-            items: t.items.filter(i => i.id !== itemId)
-          };
-        }
-        return t;
-      }));
+    if (localItemData) {
+      if (localItemData.description.trim() === '') {
+        onUpdateTraining(training.map(t => {
+          if (t.id === trainingId) {
+            return {
+              ...t,
+              items: t.items.filter(i => i.id !== itemId)
+            };
+          }
+          return t;
+        }));
+      } else {
+        onUpdateTraining(training.map(t => {
+          if (t.id === trainingId) {
+            return {
+              ...t,
+              items: t.items.map(item => item.id === itemId ? { ...item, ...localItemData } : item)
+            };
+          }
+          return t;
+        }));
+      }
     }
     setEditingItemId(null);
+    setLocalItemData(null);
   };
 
   const handleReplicate = () => {
@@ -372,7 +385,7 @@ export const DietTraining: React.FC<DietTrainingProps> = ({
 
                                   <div className="space-y-3">
                                     {meal.items.length > 0 && (
-                                      <div className="grid grid-cols-[1fr_80px_100px_32px] gap-3 px-1">
+                                      <div className="grid grid-cols-[1fr_80px_100px_64px] gap-3 px-1">
                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Descrição</span>
                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quantidade</span>
                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Un. Medida</span>
@@ -382,55 +395,72 @@ export const DietTraining: React.FC<DietTrainingProps> = ({
                                     {meal.items.map(item => (
                                       <div key={item.id}>
                                         {editingItemId === item.id ? (
-                                          <div className="grid grid-cols-[1fr_80px_100px_32px] gap-3 items-center">
+                                          <div className="grid grid-cols-[1fr_80px_100px_64px] gap-3 items-center">
                                             <input 
                                               autoFocus
                                               type="text"
-                                              value={item.description}
+                                              value={localItemData?.description || ''}
                                               onChange={(e) => handleUpdateMealItem(meal.id, item.id, { description: e.target.value })}
-                                              onBlur={() => handleBlurMealItem(meal.id, item.id)}
                                               onKeyDown={(e) => e.key === 'Enter' && handleBlurMealItem(meal.id, item.id)}
                                               placeholder="Ex: Arroz integral"
                                               className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:bg-white transition-all font-medium"
                                             />
                                             <input 
                                               type="number"
-                                              value={item.quantity || ''}
+                                              value={localItemData?.quantity || ''}
                                               onChange={(e) => handleUpdateMealItem(meal.id, item.id, { quantity: Number(e.target.value) })}
                                               placeholder="0"
                                               className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:bg-white transition-all font-medium text-center"
                                             />
                                             <select 
-                                              value={item.unit}
+                                              value={localItemData?.unit || '-'}
                                               onChange={(e) => handleUpdateMealItem(meal.id, item.id, { unit: e.target.value as MealUnit })}
                                               className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:bg-white transition-all font-medium appearance-none cursor-pointer"
                                             >
                                               {MEAL_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                                             </select>
-                                            <button 
-                                              onClick={() => handleDeleteMealItem(meal.id, item.id)}
-                                              className="p-1.5 text-slate-300 hover:text-red-500 transition-colors"
-                                            >
-                                              <X size={16} />
-                                            </button>
+                                            <div className="flex items-center gap-1">
+                                              <button 
+                                                onClick={() => handleBlurMealItem(meal.id, item.id)}
+                                                className="p-1.5 text-emerald-500 hover:bg-emerald-50 rounded-lg transition-colors"
+                                                title="Confirmar"
+                                              >
+                                                <Save size={16} />
+                                              </button>
+                                              <button 
+                                                onClick={() => {
+                                                  setEditingItemId(null);
+                                                  setLocalItemData(null);
+                                                }}
+                                                className="p-1.5 text-slate-300 hover:text-red-500 transition-colors"
+                                                title="Cancelar"
+                                              >
+                                                <X size={16} />
+                                              </button>
+                                            </div>
                                           </div>
                                         ) : (
                                           <div 
-                                            onClick={() => setEditingItemId(item.id)}
-                                            className="group grid grid-cols-[1fr_80px_100px_32px] gap-3 items-center p-3 bg-white border border-slate-200 rounded-xl hover:border-orange-200 hover:shadow-sm transition-all cursor-pointer"
+                                            onClick={() => {
+                                              setEditingItemId(item.id);
+                                              setLocalItemData({ description: item.description, quantity: item.quantity, unit: item.unit });
+                                            }}
+                                            className="group grid grid-cols-[1fr_80px_100px_64px] gap-3 items-center p-3 bg-white border border-slate-200 rounded-xl hover:border-orange-200 hover:shadow-sm transition-all cursor-pointer"
                                           >
                                             <span className="text-sm font-semibold text-slate-700 truncate">{item.description}</span>
                                             <span className="text-sm font-bold text-slate-900 text-center">{item.quantity}</span>
                                             <span className="text-xs font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded-lg text-center">{item.unit}</span>
-                                            <button 
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleDeleteMealItem(meal.id, item.id);
-                                              }}
-                                              className="p-1.5 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                                            >
-                                              <X size={16} />
-                                            </button>
+                                            <div className="flex justify-end">
+                                              <button 
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleDeleteMealItem(meal.id, item.id);
+                                                }}
+                                                className="p-1.5 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                                              >
+                                                <Trash2 size={16} />
+                                              </button>
+                                            </div>
                                           </div>
                                         )}
                                       </div>
@@ -525,7 +555,7 @@ export const DietTraining: React.FC<DietTrainingProps> = ({
 
                                   <div className="space-y-3">
                                     {t.items.length > 0 && (
-                                      <div className="grid grid-cols-[1fr_80px_100px_32px] gap-3 px-1">
+                                      <div className="grid grid-cols-[1fr_80px_100px_64px] gap-3 px-1">
                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Descrição</span>
                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quantidade</span>
                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Un. Medida</span>
@@ -535,55 +565,72 @@ export const DietTraining: React.FC<DietTrainingProps> = ({
                                     {t.items.map(item => (
                                       <div key={item.id}>
                                         {editingItemId === item.id ? (
-                                          <div className="grid grid-cols-[1fr_80px_100px_32px] gap-3 items-center">
+                                          <div className="grid grid-cols-[1fr_80px_100px_64px] gap-3 items-center">
                                             <input 
                                               autoFocus
                                               type="text"
-                                              value={item.description}
+                                              value={localItemData?.description || ''}
                                               onChange={(e) => handleUpdateTrainingItem(t.id, item.id, { description: e.target.value })}
-                                              onBlur={() => handleBlurTrainingItem(t.id, item.id)}
                                               onKeyDown={(e) => e.key === 'Enter' && handleBlurTrainingItem(t.id, item.id)}
                                               placeholder="Ex: Agachamento"
                                               className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all font-medium"
                                             />
                                             <input 
                                               type="number"
-                                              value={item.quantity || ''}
+                                              value={localItemData?.quantity || ''}
                                               onChange={(e) => handleUpdateTrainingItem(t.id, item.id, { quantity: Number(e.target.value) })}
                                               placeholder="0"
                                               className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all font-medium text-center"
                                             />
                                             <select 
-                                              value={item.unit}
+                                              value={localItemData?.unit || '-'}
                                               onChange={(e) => handleUpdateTrainingItem(t.id, item.id, { unit: e.target.value as TrainingUnit })}
                                               className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all font-medium appearance-none cursor-pointer"
                                             >
                                               {TRAINING_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                                             </select>
-                                            <button 
-                                              onClick={() => handleDeleteTrainingItem(t.id, item.id)}
-                                              className="p-1.5 text-slate-300 hover:text-red-500 transition-colors"
-                                            >
-                                              <X size={16} />
-                                            </button>
+                                            <div className="flex items-center gap-1">
+                                              <button 
+                                                onClick={() => handleBlurTrainingItem(t.id, item.id)}
+                                                className="p-1.5 text-emerald-500 hover:bg-emerald-50 rounded-lg transition-colors"
+                                                title="Confirmar"
+                                              >
+                                                <Save size={16} />
+                                              </button>
+                                              <button 
+                                                onClick={() => {
+                                                  setEditingItemId(null);
+                                                  setLocalItemData(null);
+                                                }}
+                                                className="p-1.5 text-slate-300 hover:text-red-500 transition-colors"
+                                                title="Cancelar"
+                                              >
+                                                <X size={16} />
+                                              </button>
+                                            </div>
                                           </div>
                                         ) : (
                                           <div 
-                                            onClick={() => setEditingItemId(item.id)}
-                                            className="group grid grid-cols-[1fr_80px_100px_32px] gap-3 items-center p-3 bg-white border border-slate-200 rounded-xl hover:border-emerald-200 hover:shadow-sm transition-all cursor-pointer"
+                                            onClick={() => {
+                                              setEditingItemId(item.id);
+                                              setLocalItemData({ description: item.description, quantity: item.quantity, unit: item.unit });
+                                            }}
+                                            className="group grid grid-cols-[1fr_80px_100px_64px] gap-3 items-center p-3 bg-white border border-slate-200 rounded-xl hover:border-emerald-200 hover:shadow-sm transition-all cursor-pointer"
                                           >
                                             <span className="text-sm font-semibold text-slate-700 truncate">{item.description}</span>
                                             <span className="text-sm font-bold text-slate-900 text-center">{item.quantity}</span>
                                             <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg text-center">{item.unit}</span>
-                                            <button 
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleDeleteTrainingItem(t.id, item.id);
-                                              }}
-                                              className="p-1.5 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                                            >
-                                              <X size={16} />
-                                            </button>
+                                            <div className="flex justify-end">
+                                              <button 
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleDeleteTrainingItem(t.id, item.id);
+                                                }}
+                                                className="p-1.5 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                                              >
+                                                <Trash2 size={16} />
+                                              </button>
+                                            </div>
                                           </div>
                                         )}
                                       </div>
