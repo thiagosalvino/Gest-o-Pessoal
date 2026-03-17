@@ -52,6 +52,7 @@ interface CalendarProps {
   onUpdateAppointment: (appointment: Appointment) => void;
   onToggleAppointment: (id: string) => void;
   onDeleteAppointment: (id: string, deleteAllRecurring?: boolean) => void;
+  onShowToast?: (message: string, type?: 'success' | 'error') => void;
 }
 
 type ViewType = 'month' | 'week' | 'day';
@@ -87,7 +88,8 @@ export const Calendar: React.FC<CalendarProps> = ({
   onAddAppointments, 
   onUpdateAppointment,
   onToggleAppointment,
-  onDeleteAppointment 
+  onDeleteAppointment,
+  onShowToast
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewType, setViewType] = useState<ViewType>('month');
@@ -158,7 +160,13 @@ export const Calendar: React.FC<CalendarProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTitle.trim() || !selectedDate) return;
+    if (!newTitle.trim()) {
+      onShowToast?.('Por favor, insira um título', 'error');
+      return;
+    }
+    if (!selectedDate) return;
+
+    console.log('Submitting appointment for date:', selectedDate);
 
     if (editingAppointment) {
       onUpdateAppointment({
@@ -167,7 +175,7 @@ export const Calendar: React.FC<CalendarProps> = ({
         description: newDesc,
         time: newTime,
         category: newCategory,
-        date: selectedDate.toISOString(),
+        date: format(selectedDate, 'yyyy-MM-dd'),
         recurrence: recurrenceType !== 'none' ? {
           type: recurrenceType,
           daysOfWeek: recurrenceType === 'custom' ? customDays : recurrenceType === 'weekly' ? [getDay(selectedDate)] : undefined
@@ -183,7 +191,7 @@ export const Calendar: React.FC<CalendarProps> = ({
           id: generateId(),
           title: newTitle,
           description: newDesc,
-          date: date.toISOString(),
+          date: format(date, 'yyyy-MM-dd'),
           time: newTime,
           category: newCategory,
           completed: false,

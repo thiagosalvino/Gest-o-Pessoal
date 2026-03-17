@@ -525,6 +525,7 @@ function MainApp() {
 
   const addAppointments = async (appointments: Appointment[]) => {
     if (!user) return;
+    console.log('Adding appointments:', appointments);
     try {
       const batch = writeBatch(db);
       appointments.forEach(app => {
@@ -534,6 +535,7 @@ function MainApp() {
       await batch.commit();
       showToast('Agenda atualizada!');
     } catch (error) {
+      console.error('Error adding appointments:', error);
       showToast('Erro ao salvar agenda', 'error');
     }
   };
@@ -1129,6 +1131,7 @@ function MainApp() {
                 onUpdateAppointment={updateAppointment}
                 onToggleAppointment={toggleAppointment}
                 onDeleteAppointment={deleteAppointment}
+                onShowToast={showToast}
               />
             </>
           ) : (
@@ -1219,6 +1222,13 @@ function MainApp() {
                           className="p-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all text-slate-600"
                           onKeyDown={(e) => e.key === 'Enter' && addTask()}
                         />
+                        <button 
+                          onClick={addTask}
+                          className="p-4 bg-orange-500 text-white rounded-xl hover:bg-orange-600 transition-all flex items-center justify-center shadow-lg shadow-orange-100"
+                          title="Salvar Tarefa"
+                        >
+                          <Check size={24} />
+                        </button>
                       </div>
                     </div>
                   ) : (

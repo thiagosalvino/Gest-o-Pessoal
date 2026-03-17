@@ -385,7 +385,7 @@ export const DietTraining: React.FC<DietTrainingProps> = ({
 
                                   <div className="space-y-3">
                                     {meal.items.length > 0 && (
-                                      <div className="grid grid-cols-[1fr_80px_100px_64px] gap-3 px-1">
+                                      <div className="hidden md:grid grid-cols-[1fr_80px_100px_64px] gap-3 px-1">
                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Descrição</span>
                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quantidade</span>
                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Un. Medida</span>
@@ -395,47 +395,58 @@ export const DietTraining: React.FC<DietTrainingProps> = ({
                                     {meal.items.map(item => (
                                       <div key={item.id}>
                                         {editingItemId === item.id ? (
-                                          <div className="grid grid-cols-[1fr_80px_100px_64px] gap-3 items-center">
-                                            <input 
-                                              autoFocus
-                                              type="text"
-                                              value={localItemData?.description || ''}
-                                              onChange={(e) => handleUpdateMealItem(meal.id, item.id, { description: e.target.value })}
-                                              onKeyDown={(e) => e.key === 'Enter' && handleBlurMealItem(meal.id, item.id)}
-                                              placeholder="Ex: Arroz integral"
-                                              className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:bg-white transition-all font-medium"
-                                            />
-                                            <input 
-                                              type="number"
-                                              value={localItemData?.quantity || ''}
-                                              onChange={(e) => handleUpdateMealItem(meal.id, item.id, { quantity: Number(e.target.value) })}
-                                              placeholder="0"
-                                              className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:bg-white transition-all font-medium text-center"
-                                            />
-                                            <select 
-                                              value={localItemData?.unit || '-'}
-                                              onChange={(e) => handleUpdateMealItem(meal.id, item.id, { unit: e.target.value as MealUnit })}
-                                              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:bg-white transition-all font-medium appearance-none cursor-pointer"
-                                            >
-                                              {MEAL_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                                            </select>
-                                            <div className="flex items-center gap-1">
+                                          <div className="grid grid-cols-1 md:grid-cols-[1fr_80px_100px_64px] gap-3 items-center bg-slate-50 p-3 rounded-xl border border-orange-100">
+                                            <div className="space-y-1">
+                                              <label className="text-[10px] font-bold text-slate-400 uppercase md:hidden">Descrição</label>
+                                              <input 
+                                                autoFocus
+                                                type="text"
+                                                value={localItemData?.description || ''}
+                                                onChange={(e) => handleUpdateMealItem(meal.id, item.id, { description: e.target.value })}
+                                                onKeyDown={(e) => e.key === 'Enter' && handleBlurMealItem(meal.id, item.id)}
+                                                placeholder="Ex: Arroz integral"
+                                                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium"
+                                              />
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3">
+                                              <div className="space-y-1">
+                                                <label className="text-[10px] font-bold text-slate-400 uppercase md:hidden">Qtd</label>
+                                                <input 
+                                                  type="number"
+                                                  value={localItemData?.quantity || ''}
+                                                  onChange={(e) => handleUpdateMealItem(meal.id, item.id, { quantity: Number(e.target.value) })}
+                                                  placeholder="0"
+                                                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-center"
+                                                />
+                                              </div>
+                                              <div className="space-y-1">
+                                                <label className="text-[10px] font-bold text-slate-400 uppercase md:hidden">Unidade</label>
+                                                <select 
+                                                  value={localItemData?.unit || '-'}
+                                                  onChange={(e) => handleUpdateMealItem(meal.id, item.id, { unit: e.target.value as MealUnit })}
+                                                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium appearance-none cursor-pointer"
+                                                >
+                                                  {MEAL_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                                                </select>
+                                              </div>
+                                            </div>
+                                            <div className="flex items-center justify-end gap-2 mt-2 md:mt-0">
                                               <button 
                                                 onClick={() => handleBlurMealItem(meal.id, item.id)}
-                                                className="p-1.5 text-emerald-500 hover:bg-emerald-50 rounded-lg transition-colors"
-                                                title="Confirmar"
+                                                className="flex-1 md:flex-none flex items-center justify-center gap-2 py-2.5 px-4 bg-emerald-500 text-white rounded-xl text-sm font-bold md:bg-transparent md:text-emerald-500 md:p-1.5 md:hover:bg-emerald-50 transition-all"
                                               >
                                                 <Save size={16} />
+                                                <span className="md:hidden">Salvar</span>
                                               </button>
                                               <button 
                                                 onClick={() => {
                                                   setEditingItemId(null);
                                                   setLocalItemData(null);
                                                 }}
-                                                className="p-1.5 text-slate-300 hover:text-red-500 transition-colors"
-                                                title="Cancelar"
+                                                className="flex-1 md:flex-none flex items-center justify-center gap-2 py-2.5 px-4 bg-slate-200 text-slate-600 rounded-xl text-sm font-bold md:bg-transparent md:text-slate-300 md:p-1.5 md:hover:text-red-500 transition-all"
                                               >
                                                 <X size={16} />
+                                                <span className="md:hidden">Cancelar</span>
                                               </button>
                                             </div>
                                           </div>
@@ -445,20 +456,29 @@ export const DietTraining: React.FC<DietTrainingProps> = ({
                                               setEditingItemId(item.id);
                                               setLocalItemData({ description: item.description, quantity: item.quantity, unit: item.unit });
                                             }}
-                                            className="group grid grid-cols-[1fr_80px_100px_64px] gap-3 items-center p-3 bg-white border border-slate-200 rounded-xl hover:border-orange-200 hover:shadow-sm transition-all cursor-pointer"
+                                            className="group grid grid-cols-[1fr_auto_auto] md:grid-cols-[1fr_80px_100px_64px] gap-3 items-center p-3 bg-white border border-slate-200 rounded-xl hover:border-orange-200 hover:shadow-sm transition-all cursor-pointer"
                                           >
                                             <span className="text-sm font-semibold text-slate-700 truncate">{item.description}</span>
-                                            <span className="text-sm font-bold text-slate-900 text-center">{item.quantity}</span>
-                                            <span className="text-xs font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded-lg text-center">{item.unit}</span>
-                                            <div className="flex justify-end">
+                                            <span className="text-sm font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded-lg">{item.quantity} {item.unit}</span>
+                                            <div className="flex justify-end gap-2">
+                                              <button 
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setEditingItemId(item.id);
+                                                  setLocalItemData({ description: item.description, quantity: item.quantity, unit: item.unit });
+                                                }}
+                                                className="p-1.5 text-slate-300 hover:text-orange-500 transition-all"
+                                              >
+                                                <Pencil size={14} />
+                                              </button>
                                               <button 
                                                 onClick={(e) => {
                                                   e.stopPropagation();
                                                   handleDeleteMealItem(meal.id, item.id);
                                                 }}
-                                                className="p-1.5 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                                                className="p-1.5 text-slate-300 hover:text-red-500 transition-all"
                                               >
-                                                <Trash2 size={16} />
+                                                <Trash2 size={14} />
                                               </button>
                                             </div>
                                           </div>
@@ -555,7 +575,7 @@ export const DietTraining: React.FC<DietTrainingProps> = ({
 
                                   <div className="space-y-3">
                                     {t.items.length > 0 && (
-                                      <div className="grid grid-cols-[1fr_80px_100px_64px] gap-3 px-1">
+                                      <div className="hidden md:grid grid-cols-[1fr_80px_100px_64px] gap-3 px-1">
                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Descrição</span>
                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quantidade</span>
                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Un. Medida</span>
@@ -565,47 +585,58 @@ export const DietTraining: React.FC<DietTrainingProps> = ({
                                     {t.items.map(item => (
                                       <div key={item.id}>
                                         {editingItemId === item.id ? (
-                                          <div className="grid grid-cols-[1fr_80px_100px_64px] gap-3 items-center">
-                                            <input 
-                                              autoFocus
-                                              type="text"
-                                              value={localItemData?.description || ''}
-                                              onChange={(e) => handleUpdateTrainingItem(t.id, item.id, { description: e.target.value })}
-                                              onKeyDown={(e) => e.key === 'Enter' && handleBlurTrainingItem(t.id, item.id)}
-                                              placeholder="Ex: Agachamento"
-                                              className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all font-medium"
-                                            />
-                                            <input 
-                                              type="number"
-                                              value={localItemData?.quantity || ''}
-                                              onChange={(e) => handleUpdateTrainingItem(t.id, item.id, { quantity: Number(e.target.value) })}
-                                              placeholder="0"
-                                              className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all font-medium text-center"
-                                            />
-                                            <select 
-                                              value={localItemData?.unit || '-'}
-                                              onChange={(e) => handleUpdateTrainingItem(t.id, item.id, { unit: e.target.value as TrainingUnit })}
-                                              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all font-medium appearance-none cursor-pointer"
-                                            >
-                                              {TRAINING_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                                            </select>
-                                            <div className="flex items-center gap-1">
+                                          <div className="grid grid-cols-1 md:grid-cols-[1fr_80px_100px_64px] gap-3 items-center bg-slate-50 p-3 rounded-xl border border-emerald-100">
+                                            <div className="space-y-1">
+                                              <label className="text-[10px] font-bold text-slate-400 uppercase md:hidden">Descrição</label>
+                                              <input 
+                                                autoFocus
+                                                type="text"
+                                                value={localItemData?.description || ''}
+                                                onChange={(e) => handleUpdateTrainingItem(t.id, item.id, { description: e.target.value })}
+                                                onKeyDown={(e) => e.key === 'Enter' && handleBlurTrainingItem(t.id, item.id)}
+                                                placeholder="Ex: Agachamento"
+                                                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all font-medium"
+                                              />
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3">
+                                              <div className="space-y-1">
+                                                <label className="text-[10px] font-bold text-slate-400 uppercase md:hidden">Qtd</label>
+                                                <input 
+                                                  type="number"
+                                                  value={localItemData?.quantity || ''}
+                                                  onChange={(e) => handleUpdateTrainingItem(t.id, item.id, { quantity: Number(e.target.value) })}
+                                                  placeholder="0"
+                                                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all font-medium text-center"
+                                                />
+                                              </div>
+                                              <div className="space-y-1">
+                                                <label className="text-[10px] font-bold text-slate-400 uppercase md:hidden">Unidade</label>
+                                                <select 
+                                                  value={localItemData?.unit || '-'}
+                                                  onChange={(e) => handleUpdateTrainingItem(t.id, item.id, { unit: e.target.value as TrainingUnit })}
+                                                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all font-medium appearance-none cursor-pointer"
+                                                >
+                                                  {TRAINING_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                                                </select>
+                                              </div>
+                                            </div>
+                                            <div className="flex items-center justify-end gap-2 mt-2 md:mt-0">
                                               <button 
                                                 onClick={() => handleBlurTrainingItem(t.id, item.id)}
-                                                className="p-1.5 text-emerald-500 hover:bg-emerald-50 rounded-lg transition-colors"
-                                                title="Confirmar"
+                                                className="flex-1 md:flex-none flex items-center justify-center gap-2 py-2.5 px-4 bg-emerald-500 text-white rounded-xl text-sm font-bold md:bg-transparent md:text-emerald-500 md:p-1.5 md:hover:bg-emerald-50 transition-all"
                                               >
                                                 <Save size={16} />
+                                                <span className="md:hidden">Salvar</span>
                                               </button>
                                               <button 
                                                 onClick={() => {
                                                   setEditingItemId(null);
                                                   setLocalItemData(null);
                                                 }}
-                                                className="p-1.5 text-slate-300 hover:text-red-500 transition-colors"
-                                                title="Cancelar"
+                                                className="flex-1 md:flex-none flex items-center justify-center gap-2 py-2.5 px-4 bg-slate-200 text-slate-600 rounded-xl text-sm font-bold md:bg-transparent md:text-slate-300 md:p-1.5 md:hover:text-red-500 transition-all"
                                               >
                                                 <X size={16} />
+                                                <span className="md:hidden">Cancelar</span>
                                               </button>
                                             </div>
                                           </div>
@@ -615,20 +646,29 @@ export const DietTraining: React.FC<DietTrainingProps> = ({
                                               setEditingItemId(item.id);
                                               setLocalItemData({ description: item.description, quantity: item.quantity, unit: item.unit });
                                             }}
-                                            className="group grid grid-cols-[1fr_80px_100px_64px] gap-3 items-center p-3 bg-white border border-slate-200 rounded-xl hover:border-emerald-200 hover:shadow-sm transition-all cursor-pointer"
+                                            className="group grid grid-cols-[1fr_auto_auto] md:grid-cols-[1fr_80px_100px_64px] gap-3 items-center p-3 bg-white border border-slate-200 rounded-xl hover:border-emerald-200 hover:shadow-sm transition-all cursor-pointer"
                                           >
                                             <span className="text-sm font-semibold text-slate-700 truncate">{item.description}</span>
-                                            <span className="text-sm font-bold text-slate-900 text-center">{item.quantity}</span>
-                                            <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg text-center">{item.unit}</span>
-                                            <div className="flex justify-end">
+                                            <span className="text-sm font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">{item.quantity} {item.unit}</span>
+                                            <div className="flex justify-end gap-2">
+                                              <button 
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setEditingItemId(item.id);
+                                                  setLocalItemData({ description: item.description, quantity: item.quantity, unit: item.unit });
+                                                }}
+                                                className="p-1.5 text-slate-300 hover:text-emerald-500 transition-all"
+                                              >
+                                                <Pencil size={14} />
+                                              </button>
                                               <button 
                                                 onClick={(e) => {
                                                   e.stopPropagation();
                                                   handleDeleteTrainingItem(t.id, item.id);
                                                 }}
-                                                className="p-1.5 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                                                className="p-1.5 text-slate-300 hover:text-red-500 transition-all"
                                               >
-                                                <Trash2 size={16} />
+                                                <Trash2 size={14} />
                                               </button>
                                             </div>
                                           </div>
