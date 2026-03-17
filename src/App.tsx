@@ -223,16 +223,6 @@ const ProfileModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
               className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
             />
           </div>
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-400 uppercase ml-1">URL da Foto</label>
-            <input 
-              type="text" 
-              value={photoURL}
-              onChange={(e) => setPhotoURL(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
-              placeholder="https://exemplo.com/foto.jpg"
-            />
-          </div>
         </div>
         <div className="p-6 bg-slate-50 flex gap-3">
           <button 
@@ -725,11 +715,11 @@ function MainApp() {
         )}
       >
         <div className="p-6 border-b border-slate-100 flex items-center justify-between min-w-[288px]">
-          <h1 className="text-xl font-bold flex items-center gap-2 text-slate-800">
+          <h1 className="text-xl font-bold flex items-center gap-2">
             <div className="w-8 h-8 bg-orange-600 rounded-lg flex items-center justify-center text-white">
               <Settings2 size={18} />
             </div>
-            Organize.me
+            <span className="text-black">GestorPessoal</span><span className="text-orange-600">App</span>
           </h1>
           {!isMobile && (
             <button
