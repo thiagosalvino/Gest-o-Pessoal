@@ -45,9 +45,9 @@ const DAYS_OF_WEEK = [
 ];
 
 const MEAL_TYPES: MealType[] = ['Café da manhã', 'Almoço', 'Lanche', 'Janta'];
-const TRAINING_TYPES: TrainingType[] = ['Corrida', 'Caminhada', 'Funcional', 'Academia', 'Futebol', 'Cárdio'];
+const TRAINING_TYPES: TrainingType[] = ['Corrida', 'Caminhada', 'Funcional', 'Academia', 'Futebol', 'Cárdio', 'Artes marciais'];
 const MEAL_UNITS: MealUnit[] = ['-', 'g', 'kg', 'mg', 'ml', 'L'];
-const TRAINING_UNITS: TrainingUnit[] = ['-', 'repetição', 'km', 'm'];
+const TRAINING_UNITS: TrainingUnit[] = ['-', 'repetição', 'km', 'm', 'seg', 'min', 'hora'];
 
 export const DietTraining: React.FC<DietTrainingProps> = ({ 
   diet, 

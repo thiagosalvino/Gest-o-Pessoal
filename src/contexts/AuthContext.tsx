@@ -38,10 +38,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (firebaseUser) {
         const profileDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
         if (profileDoc.exists()) {
+          const profileData = profileDoc.data();
+          // Ensure admin role and status are correct
+          const isAdminEmail = firebaseUser.email === 'administrador@app.com' || firebaseUser.email === 'thiagosalvinots2020@gmail.com';
+          const role = isAdminEmail ? 'admin' : profileData.role;
+          const status = isAdminEmail ? 'approved' : profileData.status;
+          
           // Update last login
           const lastLogin = new Date().toISOString();
-          await setDoc(doc(db, 'users', firebaseUser.uid), { lastLogin }, { merge: true });
-          setUserProfile({ ...profileDoc.data(), lastLogin });
+          await setDoc(doc(db, 'users', firebaseUser.uid), { lastLogin, role, status }, { merge: true });
+          setUserProfile({ ...profileData, lastLogin, role, status });
         } else {
           // Create profile if it doesn't exist (e.g. first login)
           const role = firebaseUser.email === 'administrador@app.com' || firebaseUser.email === 'thiagosalvinots2020@gmail.com' ? 'admin' : 'user';
@@ -130,10 +136,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await setDoc(doc(db, 'users', firebaseUser.uid), newProfile);
       setUserProfile(newProfile);
     } else {
+      const profileData = profileDoc.data();
+      // Ensure admin role and status are correct
+      const isAdminEmail = firebaseUser.email === 'thiagosalvinots2020@gmail.com';
+      const role = isAdminEmail ? 'admin' : profileData.role;
+      const status = isAdminEmail ? 'approved' : profileData.status;
+      
       // Update last login
       const lastLogin = new Date().toISOString();
-      await setDoc(doc(db, 'users', firebaseUser.uid), { lastLogin }, { merge: true });
-      setUserProfile((prev: any) => ({ ...prev, lastLogin }));
+      await setDoc(doc(db, 'users', firebaseUser.uid), { lastLogin, role, status }, { merge: true });
+      setUserProfile((prev: any) => ({ ...prev, lastLogin, role, status }));
     }
   };
 

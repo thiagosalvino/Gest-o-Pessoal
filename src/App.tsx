@@ -263,9 +263,7 @@ function MainApp() {
     const unsubscribes: (() => void)[] = [];
 
     collections.forEach(colName => {
-      const q = isAdmin 
-        ? query(collection(db, colName))
-        : query(collection(db, colName), where('userId', '==', user.uid));
+      const q = query(collection(db, colName), where('userId', '==', user.uid));
 
       const unsub = onSnapshot(q, (snapshot) => {
         const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as any[];
@@ -277,7 +275,7 @@ function MainApp() {
     return () => unsubscribes.forEach(unsub => unsub());
   }, [user, isAdmin]);
 
-  const [activeView, setActiveView] = useState<'dashboard' | 'calendar' | 'finance' | 'diet' | 'studies' | 'vision' | 'users'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'calendar' | 'finance' | 'diet' | 'studies' | 'vision' | 'users'>('vision');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
@@ -1041,7 +1039,12 @@ function MainApp() {
             <Menu size={24} />
           </button>
           <div className="ml-4">
-            <h1 className="text-lg font-bold text-slate-800">Organize.me</h1>
+            <h1 className="text-lg font-bold flex items-center gap-2">
+              <div className="w-7 h-7 bg-orange-600 rounded-lg flex items-center justify-center text-white">
+                <Settings2 size={16} />
+              </div>
+              <span className="text-black">Organize</span><span className="text-orange-600">App</span>
+            </h1>
           </div>
         </div>
 
@@ -1164,8 +1167,9 @@ function MainApp() {
               {/* Dashboard Section */}
               {!activeGoalId && (
                 <Dashboard 
-                  tasks={data.tasks.filter(t => projectGoals.map(g => g.id).includes(t.goalId))} 
+                  tasks={data.tasks} 
                   projects={data.projects} 
+                  goals={data.goals}
                 />
               )}
 

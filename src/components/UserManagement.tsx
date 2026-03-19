@@ -206,7 +206,7 @@ export const UserManagement = () => {
                     </td>
                     <td className="px-6 py-4">
                       <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
-                        user.status === 'approved' 
+                        user.role === 'admin' || user.status === 'approved' 
                           ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
                           : user.status === 'rejected'
                           ? 'bg-red-50 text-red-700 border-red-100'
@@ -214,7 +214,7 @@ export const UserManagement = () => {
                           ? 'bg-slate-100 text-slate-600 border-slate-200'
                           : 'bg-orange-50 text-orange-700 border-orange-100'
                       }`}>
-                        {user.status === 'approved' ? 'Aprovado' : user.status === 'rejected' ? 'Reprovado' : user.status === 'blocked' ? 'Bloqueado' : 'Pendente'}
+                        {user.role === 'admin' || user.status === 'approved' ? 'Aprovado' : user.status === 'rejected' ? 'Reprovado' : user.status === 'blocked' ? 'Bloqueado' : 'Pendente'}
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">

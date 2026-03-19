@@ -31,9 +31,9 @@ export type AppointmentCategory = 'routine' | 'appointment' | 'task' | 'project'
 export type RecurrenceType = 'none' | 'daily' | 'weekly' | 'custom';
 
 export type MealType = 'Café da manhã' | 'Almoço' | 'Lanche' | 'Janta';
-export type TrainingType = 'Corrida' | 'Caminhada' | 'Funcional' | 'Academia' | 'Futebol' | 'Cárdio';
+export type TrainingType = 'Corrida' | 'Caminhada' | 'Funcional' | 'Academia' | 'Futebol' | 'Cárdio' | 'Artes marciais';
 export type MealUnit = 'kg' | 'g' | 'mg' | 'ml' | 'L' | '-';
-export type TrainingUnit = 'km' | 'm' | 'repetição' | '-';
+export type TrainingUnit = 'km' | 'm' | 'repetição' | 'seg' | 'min' | 'hora' | '-';
 
 export interface MealItem {
   id: string;
