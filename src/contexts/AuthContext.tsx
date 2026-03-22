@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { 
   onAuthStateChanged, 
   User as FirebaseUser, 
@@ -74,6 +74,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return unsubscribe;
   }, []);
 
+  const logout = useCallback(async () => {
+    await signOut(auth);
+  }, []);
+
   // Session timeout check
   useEffect(() => {
     if (!user) return;
@@ -82,18 +86,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (Date.now() - lastActivity > SESSION_TIMEOUT) {
         logout();
       }
-    }, 60000); // Check every minute
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, [user, lastActivity, logout]);
+
+  useEffect(() => {
+    if (!user) return;
 
     const updateActivity = () => setLastActivity(Date.now());
     window.addEventListener('mousemove', updateActivity);
     window.addEventListener('keydown', updateActivity);
 
     return () => {
-      clearInterval(interval);
       window.removeEventListener('mousemove', updateActivity);
       window.removeEventListener('keydown', updateActivity);
     };
-  }, [user, lastActivity]);
+  }, [user]);
 
   const login = async (username: string, password: string) => {
     // Map "administrador" to "administrador@app.com"
@@ -154,10 +163,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const userRef = doc(db, 'users', user.uid);
     await setDoc(userRef, data, { merge: true });
     setUserProfile((prev: any) => ({ ...prev, ...data }));
-  };
-
-  const logout = async () => {
-    await signOut(auth);
   };
 
   const isAdmin = userProfile?.role === 'admin';

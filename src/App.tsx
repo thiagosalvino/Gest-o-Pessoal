@@ -31,7 +31,16 @@ import {
   Loader2,
   Users,
   Shield,
-  Check
+  Check,
+  Bell,
+  Monitor,
+  Repeat,
+  CalendarRange,
+  Clock,
+  Clock as ClockIcon,
+  AlertCircle,
+  Ban,
+  XCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -46,21 +55,17 @@ import {
   addMonths,
   subMonths
 } from 'date-fns';
-import { Project, Goal, Task, AppData, Appointment, MealEntry, TrainingEntry } from './types';
+import { Project, Goal, Task, AppData, Appointment, MealEntry, TrainingEntry, NotificationSettings, StandardAlert } from './types';
 import { generateId, cn } from './utils';
 import { Dashboard } from './components/Dashboard';
 import { Calendar } from './components/Calendar';
 import { KanbanBoard } from './components/KanbanBoard';
 import { DietTraining } from './components/DietTraining';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { PomodoroProvider } from './contexts/PomodoroContext';
 import { Login } from './components/Login';
 import { UserManagement } from './components/UserManagement';
-import { 
-  AlertCircle,
-  Clock as ClockIcon,
-  Ban,
-  XCircle
-} from 'lucide-react';
+import { PomodoroTimer } from './components/PomodoroTimer';
 
 const PendingApproval = ({ status, onLogout }: { status: string; onLogout: () => void }) => {
   const getStatusConfig = () => {
@@ -244,6 +249,57 @@ const ProfileModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
   );
 };
 
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId: string | undefined;
+    email: string | null | undefined;
+    emailVerified: boolean | undefined;
+    isAnonymous: boolean | undefined;
+    tenantId: string | null | undefined;
+    providerInfo: {
+      providerId: string;
+      displayName: string | null;
+      email: string | null;
+      photoUrl: string | null;
+    }[];
+  }
+}
+
+const handleFirestoreError = (error: unknown, operationType: OperationType, path: string | null, auth: any) => {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData.map((provider: any) => ({
+        providerId: provider.providerId,
+        displayName: provider.displayName,
+        email: provider.email,
+        photoUrl: provider.photoURL
+      })) || []
+    },
+    operationType,
+    path
+  }
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
 function MainApp() {
   const { user, userProfile, loading, logout, isAdmin, isApproved } = useAuth();
   const [data, setData] = useState<AppData>({
@@ -252,15 +308,28 @@ function MainApp() {
     tasks: [],
     appointments: [],
     diet: [],
-    training: []
+    training: [],
+    standardAlerts: [],
+    notificationSettings: {
+      browserNotificationsEnabled: false,
+      userId: ''
+    }
   });
 
   // Firestore Sync
   useEffect(() => {
     if (!user) return;
 
-    const collections = ['projects', 'goals', 'tasks', 'appointments', 'diet', 'training'];
+    const collections = ['projects', 'goals', 'tasks', 'appointments', 'diet', 'training', 'standardAlerts'];
     const unsubscribes: (() => void)[] = [];
+
+    // Sync settings
+    const settingsUnsub = onSnapshot(doc(db, 'settings', user.uid), (snapshot) => {
+      if (snapshot.exists()) {
+        setData(prev => ({ ...prev, notificationSettings: snapshot.data() as NotificationSettings }));
+      }
+    });
+    unsubscribes.push(settingsUnsub);
 
     collections.forEach(colName => {
       const q = query(collection(db, colName), where('userId', '==', user.uid));
@@ -275,7 +344,7 @@ function MainApp() {
     return () => unsubscribes.forEach(unsub => unsub());
   }, [user, isAdmin]);
 
-  const [activeView, setActiveView] = useState<'dashboard' | 'calendar' | 'finance' | 'diet' | 'studies' | 'vision' | 'users'>('vision');
+  const [activeView, setActiveView] = useState<'dashboard' | 'calendar' | 'finance' | 'diet' | 'studies' | 'vision' | 'users' | 'notifications'>('vision');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
@@ -287,6 +356,61 @@ function MainApp() {
       setActiveView('dashboard');
     }
   }, [activeView, isAdmin, loading]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNotificationPermissionStatus(typeof Notification !== 'undefined' ? Notification.permission : 'default');
+    }, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Standard Alerts Logic
+  useEffect(() => {
+    if (!user || !data.notificationSettings?.browserNotificationsEnabled || Notification.permission !== 'granted') return;
+
+    const interval = setInterval(() => {
+      const now = new Date();
+      const nowStr = now.toISOString();
+
+      data.standardAlerts?.forEach(async (alert) => {
+        const start = new Date(alert.startDateTime);
+        const end = new Date(alert.endDateTime);
+
+        // Check if within period
+        if (now < start || now > end) return;
+
+        // Check if only today
+        if (alert.duration === 'only_today') {
+          const todayStr = now.toISOString().split('T')[0];
+          const startStr = start.toISOString().split('T')[0];
+          if (todayStr !== startStr) return;
+        }
+
+        // Check cycle
+        const lastTriggered = alert.lastTriggeredAt ? new Date(alert.lastTriggeredAt) : null;
+        const diffMinutes = lastTriggered ? (now.getTime() - lastTriggered.getTime()) / (1000 * 60) : alert.cycleMinutes + 1;
+
+        if (diffMinutes >= alert.cycleMinutes) {
+          // Trigger notification
+          new Notification("Lembrete Programado", {
+            body: alert.description,
+            icon: "/favicon.ico"
+          });
+
+          // Update lastTriggeredAt
+          try {
+            await updateDoc(doc(db, 'standardAlerts', alert.id!), {
+              lastTriggeredAt: nowStr
+            });
+          } catch (error) {
+            console.error('Error updating alert:', error);
+          }
+        }
+      });
+    }, 60000); // Check every minute
+
+    return () => clearInterval(interval);
+  }, [user, data.standardAlerts, data.notificationSettings]);
 
   const [taskViewMode, setTaskViewMode] = useState<'list' | 'kanban'>('list');
   const [activeProjectId, setActiveProjectId] = useState<string>(data.projects[0]?.id || '');
@@ -304,6 +428,42 @@ function MainApp() {
   const [isSidebarPinned, setIsSidebarPinned] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [notifications, setNotifications] = useState<{ id: string; title: string; message: string; time: number; read: boolean }[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showAddAlertModal, setShowAddAlertModal] = useState(false);
+  const [newAlert, setNewAlert] = useState<Partial<StandardAlert>>({
+    description: '',
+    cycleMinutes: 120,
+    duration: 'every_day',
+    startDateTime: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
+    endDateTime: format(new Date(), "yyyy-MM-dd'T'HH:mm")
+  });
+  const [notificationPermissionStatus, setNotificationPermissionStatus] = useState<NotificationPermission>(
+    typeof Notification !== 'undefined' ? Notification.permission : 'default'
+  );
+  const notifiedRef = React.useRef<Set<string>>(new Set());
+  const whatsappNotifiedRef = React.useRef<Set<string>>(new Set());
+  const desktopNotificationRef = React.useRef<HTMLDivElement>(null);
+  const mobileNotificationRef = React.useRef<HTMLDivElement>(null);
+
+  // Close notifications when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const isDesktopClick = desktopNotificationRef.current && desktopNotificationRef.current.contains(event.target as Node);
+      const isMobileClick = mobileNotificationRef.current && mobileNotificationRef.current.contains(event.target as Node);
+      
+      if (!isDesktopClick && !isMobileClick) {
+        setShowNotifications(false);
+      }
+    };
+
+    if (showNotifications) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showNotifications]);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -511,6 +671,74 @@ function MainApp() {
     return [...data.appointments, ...projectTasksAsAppointments, ...dietAppointments, ...trainingAppointments];
   }, [data.appointments, data.tasks, data.goals, data.projects, data.diet, data.training]);
 
+  // Notification Logic
+  useEffect(() => {
+    const checkNotifications = () => {
+      const now = new Date();
+      const newNotifications: typeof notifications = [];
+
+      calendarAppointments.forEach(app => {
+        if (app.completed) return;
+
+        const [year, month, day] = app.date.split('-').map(Number);
+        const [hours, minutes] = app.time.split(':').map(Number);
+        const eventTime = new Date(year, month - 1, day, hours, minutes);
+        
+        const diffInMinutes = Math.floor((eventTime.getTime() - now.getTime()) / (1000 * 60));
+        const intervals = [30, 15, 5, 0];
+
+        intervals.forEach(interval => {
+          const notificationKey = `${app.id}_${interval}`;
+          if (diffInMinutes === interval && !notifiedRef.current.has(notificationKey)) {
+            const categoryLabels: Record<string, string> = {
+              routine: 'Rotina',
+              appointment: 'Compromisso',
+              task: 'Tarefa',
+              project: 'Projeto',
+              diet: 'Alimentação',
+              training: 'Treino',
+              study: 'Estudo'
+            };
+            const categoryLabel = categoryLabels[app.category] || 'Agenda';
+            
+            const message = interval === 0 
+              ? `Está na hora: ${app.title}` 
+              : `Faltam ${interval} minutos para: ${app.title}`;
+            
+            const newNotif = {
+              id: generateId(),
+              title: `Lembrete: ${categoryLabel}`,
+              message,
+              time: Date.now(),
+              read: false
+            };
+
+            newNotifications.push(newNotif);
+            notifiedRef.current.add(notificationKey);
+            showToast(`${categoryLabel}: ${message}`);
+
+          // Browser Native Notification
+          if (data.notificationSettings?.browserNotificationsEnabled && Notification.permission === 'granted') {
+            new Notification(`OrganizeApp - ${categoryLabel}`, {
+              body: `${app.time}: ${app.title}\n${message}`,
+              icon: '/favicon.ico' // Or any app icon
+            });
+          }
+          }
+        });
+      });
+
+      if (newNotifications.length > 0) {
+        setNotifications(prev => [...newNotifications, ...prev].slice(0, 20));
+      }
+    };
+
+    const interval = setInterval(checkNotifications, 30000); // Check every 30 seconds
+    checkNotifications(); // Initial check
+
+    return () => clearInterval(interval);
+  }, [calendarAppointments]);
+
   const addAppointments = async (appointments: Appointment[]) => {
     if (!user) return;
     console.log('Adding appointments:', appointments);
@@ -659,6 +887,35 @@ function MainApp() {
     }
   };
 
+  const updateNotificationSettings = async (settings: NotificationSettings) => {
+    if (!user) return;
+    try {
+      await setDoc(doc(db, 'settings', user.uid), settings);
+      setData(prev => ({ ...prev, notificationSettings: settings }));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `settings/${user.uid}`, { currentUser: user });
+    }
+  };
+
+  const requestNotificationPermission = async () => {
+    if (!('Notification' in window)) {
+      showToast('Este navegador não suporta notificações desktop', 'error');
+      return;
+    }
+
+    const permission = await Notification.requestPermission();
+    if (permission === 'granted') {
+      updateNotificationSettings({
+        ...data.notificationSettings!,
+        browserNotificationsEnabled: true,
+        userId: user!.uid
+      });
+      showToast('Notificações ativadas com sucesso!');
+    } else {
+      showToast('Permissão de notificação negada', 'error');
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -708,17 +965,73 @@ function MainApp() {
           opacity: { duration: 0.2 }
         }}
         className={cn(
-          "bg-white border-r border-slate-200 flex flex-col h-full z-50 overflow-hidden shrink-0",
-          isMobile && "fixed left-0 top-0 shadow-2xl"
+          "bg-white border-r border-slate-200 flex flex-col h-full z-50 shrink-0",
+          isMobile ? "fixed left-0 top-0 shadow-2xl overflow-visible" : "overflow-visible"
         )}
       >
         <div className="p-6 border-b border-slate-100 flex items-center justify-between min-w-[288px]">
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <div className="w-8 h-8 bg-orange-600 rounded-lg flex items-center justify-center text-white">
-              <Settings2 size={18} />
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold flex items-center gap-2">
+              <div className="w-8 h-8 bg-orange-600 rounded-lg flex items-center justify-center text-white">
+                <Settings2 size={18} />
+              </div>
+              <span className="text-black">Organize</span><span className="text-orange-600">App</span>
+            </h1>
+            <div className="relative" ref={desktopNotificationRef}>
+              <button 
+                onClick={() => setShowNotifications(!showNotifications)}
+                className={cn(
+                  "p-2 rounded-lg transition-all relative",
+                  notifications.some(n => !n.read) ? "text-orange-600 bg-orange-50" : "text-slate-400 hover:bg-slate-100"
+                )}
+              >
+                <Bell size={20} />
+                {notifications.some(n => !n.read) && (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white" />
+                )}
+              </button>
+              
+              <AnimatePresence>
+                {showNotifications && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="absolute left-0 mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[60] overflow-hidden"
+                  >
+                    <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                      <span className="text-sm font-bold text-slate-800">Notificações</span>
+                      <button 
+                        onClick={() => {
+                          setNotifications([]);
+                          setShowNotifications(false);
+                        }}
+                        className="text-[10px] font-bold text-orange-600 uppercase tracking-wider hover:underline"
+                      >
+                        Limpar tudo
+                      </button>
+                    </div>
+                    <div className="max-h-80 overflow-y-auto">
+                      {notifications.length > 0 ? (
+                        notifications.map(notif => (
+                          <div key={notif.id} className={cn("p-4 border-b border-slate-50 last:border-0", !notif.read && "bg-orange-50/30")}>
+                            <p className="text-xs font-bold text-slate-800">{notif.title}</p>
+                            <p className="text-xs text-slate-500 mt-1">{notif.message}</p>
+                            <p className="text-[10px] text-slate-400 mt-2">{format(notif.time, 'HH:mm')}</p>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-8 text-center">
+                          <Bell size={24} className="mx-auto text-slate-200 mb-2" />
+                          <p className="text-xs text-slate-400 font-medium">Nenhuma notificação</p>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
-            <span className="text-black">Organize</span><span className="text-orange-600">App</span>
-          </h1>
+          </div>
           {!isMobile && (
             <button
               onClick={() => setIsSidebarPinned(!isSidebarPinned)}
@@ -819,6 +1132,21 @@ function MainApp() {
             >
               <Dumbbell size={18} />
               Dieta & Treino
+            </button>
+            <button
+              onClick={() => {
+                setActiveView('notifications');
+                if (isMobile) setIsSidebarOpen(false);
+              }}
+              className={cn(
+                "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all mt-1",
+                activeView === 'notifications' 
+                  ? "bg-orange-50 text-orange-700" 
+                  : "text-slate-600 hover:bg-slate-50"
+              )}
+            >
+              <Bell size={18} />
+              Gestor de Notificação
             </button>
             {isAdmin && (
               <button
@@ -1038,13 +1366,70 @@ function MainApp() {
           >
             <Menu size={24} />
           </button>
-          <div className="ml-4">
+          <div className="ml-4 flex items-center gap-3">
             <h1 className="text-lg font-bold flex items-center gap-2">
               <div className="w-7 h-7 bg-orange-600 rounded-lg flex items-center justify-center text-white">
                 <Settings2 size={16} />
               </div>
               <span className="text-black">Organize</span><span className="text-orange-600">App</span>
             </h1>
+            <div className="relative" ref={mobileNotificationRef}>
+              <button 
+                onClick={() => {
+                  setActiveView('dashboard');
+                  setShowNotifications(!showNotifications);
+                }}
+                className={cn(
+                  "p-2 rounded-lg relative",
+                  notifications.some(n => !n.read) ? "text-orange-600 bg-orange-50" : "text-slate-400"
+                )}
+              >
+                <Bell size={20} />
+                {notifications.some(n => !n.read) && (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white" />
+                )}
+              </button>
+
+              <AnimatePresence>
+                {showNotifications && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[60] overflow-hidden"
+                  >
+                    <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                      <span className="text-sm font-bold text-slate-800">Notificações</span>
+                      <button 
+                        onClick={() => {
+                          setNotifications([]);
+                          setShowNotifications(false);
+                        }}
+                        className="text-[10px] font-bold text-orange-600 uppercase tracking-wider hover:underline"
+                      >
+                        Limpar tudo
+                      </button>
+                    </div>
+                    <div className="max-h-80 overflow-y-auto">
+                      {notifications.length > 0 ? (
+                        notifications.map(notif => (
+                          <div key={notif.id} className={cn("p-4 border-b border-slate-50 last:border-0", !notif.read && "bg-orange-50/30")}>
+                            <p className="text-xs font-bold text-slate-800">{notif.title}</p>
+                            <p className="text-xs text-slate-500 mt-1">{notif.message}</p>
+                            <p className="text-[10px] text-slate-400 mt-2">{format(notif.time, 'HH:mm')}</p>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-8 text-center">
+                          <Bell size={24} className="mx-auto text-slate-200 mb-2" />
+                          <p className="text-xs text-slate-400 font-medium">Nenhuma notificação</p>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
 
@@ -1073,7 +1458,309 @@ function MainApp() {
         </motion.div>
 
         <div className="max-w-5xl mx-auto p-4 md:p-8">
-          {activeView === 'vision' ? (
+          {activeView === 'notifications' ? (
+            <div className="max-w-4xl mx-auto">
+              <div className="mb-8">
+                <h1 className="text-3xl font-bold text-slate-800">Gestor de Notificação</h1>
+                <p className="text-slate-500 mt-2">Configure como você deseja receber seus lembretes e alertas.</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                      <Bell size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-800">Notificações do Sistema</h3>
+                      <p className="text-sm text-slate-500">Receba alertas nativos no seu dispositivo.</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          "w-10 h-10 rounded-xl flex items-center justify-center",
+                          data.notificationSettings?.browserNotificationsEnabled ? "bg-indigo-100 text-indigo-600" : "bg-slate-200 text-slate-400"
+                        )}>
+                          <Monitor size={20} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-700">Notificações no Navegador</p>
+                          <p className="text-[10px] text-slate-500">Alertas nativos do Windows, macOS, Android ou iOS.</p>
+                        </div>
+                      </div>
+                      <button
+                        disabled={notificationPermissionStatus === 'denied'}
+                        onClick={() => {
+                          if (data.notificationSettings?.browserNotificationsEnabled) {
+                            updateNotificationSettings({
+                              ...data.notificationSettings!,
+                              browserNotificationsEnabled: false,
+                              userId: user.uid
+                            });
+                            showToast('Notificações desativadas');
+                          } else {
+                            requestNotificationPermission();
+                          }
+                        }}
+                        className={cn(
+                          "w-12 h-6 rounded-full transition-colors relative",
+                          data.notificationSettings?.browserNotificationsEnabled ? "bg-indigo-500" : "bg-slate-300",
+                          notificationPermissionStatus === 'denied' && "opacity-50 cursor-not-allowed"
+                        )}
+                      >
+                        <div className={cn(
+                          "absolute top-1 w-4 h-4 bg-white rounded-full transition-all",
+                          data.notificationSettings?.browserNotificationsEnabled ? "right-1" : "left-1"
+                        )} />
+                      </button>
+                    </div>
+
+                    {notificationPermissionStatus === 'denied' && (
+                      <div className="bg-red-50 p-4 rounded-xl border border-red-100 flex items-start gap-3">
+                        <AlertCircle className="text-red-600 shrink-0" size={18} />
+                        <div>
+                          <p className="text-xs font-bold text-red-800">Permissão Negada pelo Navegador</p>
+                          <p className="text-[10px] text-red-700 mt-1">
+                            Você bloqueou as notificações para este site. Para ativar, clique no ícone de cadeado na barra de endereços e mude "Notificações" para "Permitir".
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
+                      <p className="text-[10px] text-amber-800 font-medium">
+                        ⚠️ <strong>Importante:</strong><br/>
+                        Para que as notificações funcionem, você deve permitir que o navegador envie notificações quando solicitado. Se você já negou anteriormente, precisará reativar nas configurações do cadeado na barra de endereços.
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        if (Notification.permission === 'granted') {
+                          new Notification("Teste de Notificação", {
+                            body: "Se você está vendo isso, as notificações estão funcionando corretamente! 🚀",
+                            icon: "/favicon.ico"
+                          });
+                          showToast('Notificação de teste enviada!');
+                        } else {
+                          showToast('Ative as notificações primeiro', 'error');
+                        }
+                      }}
+                      className="w-full flex items-center justify-center gap-2 py-3 border-2 border-indigo-500 text-indigo-600 rounded-xl text-sm font-bold hover:bg-indigo-50 transition-all"
+                    >
+                      Testar Notificação Nativa
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-orange-50 p-8 rounded-3xl border border-orange-100">
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="w-12 h-12 rounded-2xl bg-orange-100 flex items-center justify-center text-orange-600">
+                      <ClockIcon size={24} />
+                    </div>
+                    <h3 className="text-lg font-bold text-orange-900">Regras de Tempo</h3>
+                  </div>
+                  
+                  <p className="text-sm text-orange-800 mb-6">
+                    O sistema dispara alertas automáticos nos seguintes intervalos:
+                  </p>
+
+                  <ul className="space-y-3">
+                    {['30 minutos antes', '15 minutos antes', '5 minutos antes', 'No horário exato'].map((item, idx) => (
+                      <li key={idx} className="flex items-center gap-3 text-sm text-orange-700">
+                        <div className="w-1.5 h-1.5 rounded-full bg-orange-400" />
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <div className="mt-8 pt-6 border-t border-orange-200">
+                    <p className="text-[11px] text-orange-600 italic">
+                      Nota: As notificações nativas funcionam mesmo se a aba do sistema não estiver em foco, desde que o navegador esteja aberto.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Standard Alerts Section */}
+              <div className="mt-12">
+                <div className="flex items-center justify-between mb-8">
+                  <div>
+                    <h2 className="text-2xl font-bold text-slate-800">Alertas Recorrentes</h2>
+                    <p className="text-slate-500">Cadastre alertas automáticos (ex: beber água, alongar, remédios).</p>
+                  </div>
+                  <button
+                    onClick={() => setShowAddAlertModal(true)}
+                    className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200"
+                  >
+                    <Plus size={20} />
+                    Novo Alerta
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {data.standardAlerts?.map((alert) => (
+                    <div key={alert.id} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                          <Repeat size={20} />
+                        </div>
+                        <button
+                          onClick={async () => {
+                            try {
+                              await deleteDoc(doc(db, 'standardAlerts', alert.id!));
+                              showToast('Alerta removido');
+                            } catch (error) {
+                              showToast('Erro ao remover alerta', 'error');
+                            }
+                          }}
+                          className="p-2 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                      <h3 className="font-bold text-slate-800 mb-2">{alert.description}</h3>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                          <Clock size={14} />
+                          <span>Ciclo: A cada {alert.cycleMinutes / 60}h</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                          <CalendarRange size={14} />
+                          <span>Duração: {alert.duration === 'every_day' ? 'Todos os dias' : 'Apenas hoje'}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                          <CalendarIcon size={14} />
+                          <span>Período: {format(new Date(alert.startDateTime), 'dd/MM HH:mm')} até {format(new Date(alert.endDateTime), 'dd/MM HH:mm')}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {data.standardAlerts?.length === 0 && (
+                    <div className="col-span-full py-12 text-center bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
+                      <p className="text-slate-400 font-medium">Nenhum alerta recorrente cadastrado.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Add Alert Modal */}
+              <AnimatePresence>
+                {showAddAlertModal && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden"
+                    >
+                      <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                        <h3 className="text-xl font-bold text-slate-800">Novo Alerta Recorrente</h3>
+                        <button onClick={() => setShowAddAlertModal(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                          <X size={20} />
+                        </button>
+                      </div>
+                      <div className="p-6 space-y-4">
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Descrição do Alerta</label>
+                          <input
+                            type="text"
+                            placeholder="Ex: Hora de beber água"
+                            value={newAlert.description}
+                            onChange={(e) => setNewAlert(prev => ({ ...prev, description: e.target.value }))}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Ciclo (Horas)</label>
+                            <select
+                              value={newAlert.cycleMinutes! / 60}
+                              onChange={(e) => setNewAlert(prev => ({ ...prev, cycleMinutes: parseInt(e.target.value) * 60 }))}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                            >
+                              {[1, 2, 3, 4, 6, 8, 12].map(h => (
+                                <option key={h} value={h}>{h}h</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Duração</label>
+                            <select
+                              value={newAlert.duration}
+                              onChange={(e) => setNewAlert(prev => ({ ...prev, duration: e.target.value as any }))}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                            >
+                              <option value="every_day">Todos os dias</option>
+                              <option value="only_today">Apenas hoje</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Início</label>
+                          <input
+                            type="datetime-local"
+                            value={newAlert.startDateTime}
+                            onChange={(e) => setNewAlert(prev => ({ ...prev, startDateTime: e.target.value }))}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Término</label>
+                          <input
+                            type="datetime-local"
+                            value={newAlert.endDateTime}
+                            onChange={(e) => setNewAlert(prev => ({ ...prev, endDateTime: e.target.value }))}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                          />
+                        </div>
+                      </div>
+                      <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
+                        <button
+                          onClick={() => setShowAddAlertModal(false)}
+                          className="flex-1 py-3 border-2 border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-white transition-all"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (!newAlert.description) {
+                              showToast('Preencha a descrição', 'error');
+                              return;
+                            }
+                            try {
+                              await addDoc(collection(db, 'standardAlerts'), {
+                                ...newAlert,
+                                userId: user!.uid
+                              });
+                              setShowAddAlertModal(false);
+                              setNewAlert({
+                                description: '',
+                                cycleMinutes: 120,
+                                duration: 'every_day',
+                                startDateTime: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
+                                endDateTime: format(new Date(), "yyyy-MM-dd'T'HH:mm")
+                              });
+                              showToast('Alerta cadastrado!');
+                            } catch (error) {
+                              showToast('Erro ao cadastrar alerta', 'error');
+                            }
+                          }}
+                          className="flex-1 py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200"
+                        >
+                          Cadastrar
+                        </button>
+                      </div>
+                    </motion.div>
+                  </div>
+                )}
+              </AnimatePresence>
+            </div>
+          ) : activeView === 'vision' ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <div className="w-24 h-24 bg-orange-100 rounded-full flex items-center justify-center mb-6 text-orange-500">
                 <Eye size={48} />
@@ -1087,18 +1774,17 @@ function MainApp() {
               </div>
             </div>
           ) : activeView === 'studies' ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <div className="w-24 h-24 bg-orange-100 rounded-full flex items-center justify-center mb-6 text-orange-500">
-                <BookOpen size={48} />
-              </div>
-              <h2 className="text-3xl font-bold text-slate-900 mb-4">Estudos</h2>
-              <p className="text-slate-500 max-w-md mx-auto">
-                Esta funcionalidade está em desenvolvimento. Em breve você poderá gerenciar seus estudos, cursos e anotações diretamente por aqui.
-              </p>
-              <div className="mt-8 px-4 py-2 bg-orange-50 text-orange-700 rounded-full text-sm font-medium border border-orange-200">
-                Em breve
-              </div>
-            </div>
+            <>
+              <header className="mb-8">
+                <div className="flex items-center gap-2 text-slate-400 text-sm mb-2">
+                  <span>Gestão Pessoal</span>
+                  <ChevronRight size={14} />
+                  <span className="text-orange-600 font-semibold">Estudos (Pomodoro)</span>
+                </div>
+                <h2 className="text-3xl font-bold text-slate-900">Foco & Produtividade</h2>
+              </header>
+              <PomodoroTimer />
+            </>
           ) : activeView === 'diet' ? (
             <DietTraining 
               diet={data.diet || []} 
@@ -1400,7 +2086,9 @@ function MainApp() {
 export default function App() {
   return (
     <AuthProvider>
-      <MainApp />
+      <PomodoroProvider>
+        <MainApp />
+      </PomodoroProvider>
     </AuthProvider>
   );
 }

@@ -54,7 +54,7 @@ export const Login: React.FC = () => {
             <div className="w-16 h-16 bg-orange-600 rounded-2xl flex items-center justify-center text-white mx-auto mb-6 shadow-lg shadow-orange-200">
               <Lock size={32} />
             </div>
-            <h1 className="text-2xl font-bold text-slate-900">Bem-vindo de volta</h1>
+            <h1 className="text-2xl font-bold text-slate-900">MindTech</h1>
             <p className="text-slate-500 mt-2">Acesse sua conta para continuar</p>
           </div>
 
@@ -141,7 +141,7 @@ export const Login: React.FC = () => {
 
           <div className="p-6 bg-slate-50 border-t border-slate-100 text-center">
             <p className="text-xs text-slate-400">
-              © 2026 Organize.me - Gerenciamento Pessoal
+              © 2026 MindTech - Gerenciamento Pessoal
             </p>
           </div>
         </div>

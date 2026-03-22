@@ -26,7 +26,7 @@ export interface Project {
   createdAt: number;
 }
 
-export type AppointmentCategory = 'routine' | 'appointment' | 'task' | 'project' | 'diet' | 'training';
+export type AppointmentCategory = 'routine' | 'appointment' | 'task' | 'project' | 'diet' | 'training' | 'study';
 
 export type RecurrenceType = 'none' | 'daily' | 'weekly' | 'custom';
 
@@ -84,6 +84,22 @@ export interface Appointment {
   createdAt: number;
 }
 
+export interface NotificationSettings {
+  browserNotificationsEnabled: boolean;
+  userId: string;
+}
+
+export interface StandardAlert {
+  id?: string;
+  description: string;
+  cycleMinutes: number; // e.g., 120 for 2h
+  duration: 'every_day' | 'only_today';
+  startDateTime: string;
+  endDateTime: string;
+  lastTriggeredAt?: string;
+  userId: string;
+}
+
 export interface AppData {
   projects: Project[];
   goals: Goal[];
@@ -91,4 +107,32 @@ export interface AppData {
   appointments: Appointment[];
   diet?: MealEntry[];
   training?: TrainingEntry[];
+  pomodoroSessions?: PomodoroSession[];
+  standardAlerts?: StandardAlert[];
+  notificationSettings?: NotificationSettings;
+}
+
+export type PomodoroClassification = 'Estudo' | 'Trabalho' | 'Projetos/Objetivos' | 'Outros';
+
+export interface PomodoroNote {
+  id: string;
+  title: string;
+  text: string;
+  createdAt: string;
+}
+
+export interface PomodoroSession {
+  id: string;
+  userId: string;
+  classification: PomodoroClassification;
+  description: string;
+  studyTime: number; // minutes
+  breakTime: number; // minutes
+  totalCycles: number;
+  completedCycles: number;
+  totalElapsedSeconds: number; // total actual time spent
+  focusedSeconds: number; // only study time
+  status: 'Concluído' | 'Não Concluído' | 'Andamento';
+  createdAt: string;
+  note?: PomodoroNote;
 }

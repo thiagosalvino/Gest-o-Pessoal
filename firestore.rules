@@ -23,11 +23,23 @@ service cloud.firestore {
     // Collection: training
     // Fields: id, dayOfWeek, type, time, userId
     //
+    // Collection: standardAlerts
+    // Fields: description, cycleMinutes, duration, startDateTime, endDateTime, userId
+    //
     // ===============================================================
 
     // Helper Functions
     function isAuthenticated() {
       return request.auth != null;
+    }
+
+    function isValidStandardAlert(data) {
+      return data.description is string && data.description.size() > 0 && data.description.size() < 200 &&
+             data.cycleMinutes is number && data.cycleMinutes > 0 &&
+             data.duration in ['every_day', 'only_today'] &&
+             data.startDateTime is string &&
+             data.endDateTime is string &&
+             data.userId == request.auth.uid;
     }
 
     function isAdmin() {
@@ -50,6 +62,19 @@ service cloud.firestore {
       allow get: if isOwner(userId) || isAdmin();
       allow list: if isAdmin();
       allow write: if isOwner(userId) || isAdmin();
+    }
+
+    // Rules for settings collection
+    match /settings/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+
+    // Rules for standardAlerts collection
+    match /standardAlerts/{alertId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isAuthenticated() && isValidStandardAlert(request.resource.data);
+      allow update: if (isOwner(resource.data.userId) || isAdmin()) && isValidStandardAlert(request.resource.data);
+      allow delete: if isOwner(resource.data.userId) || isAdmin();
     }
 
     // Generic rules for user-owned data

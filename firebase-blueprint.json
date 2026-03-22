@@ -79,6 +79,31 @@
         "userId": { "type": "string" }
       },
       "required": ["id", "dayOfWeek", "type", "time", "userId"]
+    },
+    "NotificationSettings": {
+      "title": "NotificationSettings",
+      "description": "User notification preferences",
+      "type": "object",
+      "properties": {
+        "browserNotificationsEnabled": { "type": "boolean" },
+        "userId": { "type": "string" }
+      },
+      "required": ["browserNotificationsEnabled", "userId"]
+    },
+    "StandardAlert": {
+      "title": "StandardAlert",
+      "description": "Recurring alerts independent of the calendar",
+      "type": "object",
+      "properties": {
+        "description": { "type": "string" },
+        "cycleMinutes": { "type": "number" },
+        "duration": { "type": "string", "enum": ["every_day", "only_today"] },
+        "startDateTime": { "type": "string" },
+        "endDateTime": { "type": "string" },
+        "lastTriggeredAt": { "type": "string" },
+        "userId": { "type": "string" }
+      },
+      "required": ["description", "cycleMinutes", "duration", "startDateTime", "endDateTime", "userId"]
     }
   },
   "firestore": {
@@ -105,6 +130,14 @@
     "/training/{trainingId}": {
       "schema": "TrainingEntry",
       "description": "Training entries"
+    },
+    "/standardAlerts/{alertId}": {
+      "schema": "StandardAlert",
+      "description": "Standard alerts collection"
+    },
+    "/settings/{userId}": {
+      "schema": "NotificationSettings",
+      "description": "User notification settings"
     }
   }
 }

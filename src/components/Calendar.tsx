@@ -35,6 +35,7 @@ import {
   Briefcase,
   FolderPlus,
   CheckSquare,
+  BookOpen,
   Edit2,
   CheckCircle2,
   Circle,
@@ -64,6 +65,7 @@ const CATEGORIES: { value: AppointmentCategory; label: string; icon: any; color:
   { value: 'project', label: 'Projeto', icon: FolderPlus, color: 'text-blue-500 bg-blue-50' },
   { value: 'diet', label: 'Alimentação', icon: Utensils, color: 'text-rose-500 bg-rose-50' },
   { value: 'training', label: 'Treino', icon: Dumbbell, color: 'text-indigo-500 bg-indigo-50' },
+  { value: 'study', label: 'Estudo', icon: BookOpen, color: 'text-amber-500 bg-amber-50' },
 ];
 
 const RECURRENCE_OPTIONS: { value: RecurrenceType; label: string }[] = [
