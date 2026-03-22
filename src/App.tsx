@@ -55,6 +55,7 @@ import {
   addMonths,
   subMonths
 } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { Project, Goal, Task, AppData, Appointment, MealEntry, TrainingEntry, NotificationSettings, StandardAlert } from './types';
 import { generateId, cn } from './utils';
 import { Dashboard } from './components/Dashboard';
@@ -1761,16 +1762,58 @@ function MainApp() {
               </AnimatePresence>
             </div>
           ) : activeView === 'vision' ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <div className="w-24 h-24 bg-orange-100 rounded-full flex items-center justify-center mb-6 text-orange-500">
-                <Eye size={48} />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
+              {/* Primeira Metade: Meu Dia */}
+              <div className="flex flex-col h-full overflow-hidden">
+                <div className="mb-4 flex items-center justify-between shrink-0">
+                  <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                    <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center text-orange-600">
+                      <CalendarIcon size={18} />
+                    </div>
+                    Meu Dia
+                  </h2>
+                  <div className="px-3 py-1 bg-orange-50 text-orange-700 rounded-full text-xs font-bold border border-orange-100">
+                    {format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR })}
+                  </div>
+                </div>
+                <div className="flex-1 overflow-hidden rounded-3xl border border-slate-200 shadow-sm bg-white">
+                  <Calendar 
+                    appointments={data.appointments}
+                    onAddAppointments={addAppointments}
+                    onUpdateAppointment={updateAppointment}
+                    onToggleAppointment={toggleAppointment}
+                    onDeleteAppointment={deleteAppointment}
+                    onShowToast={showToast}
+                    initialViewType="day"
+                    initialDate={new Date()}
+                    hideHeader={true}
+                  />
+                </div>
               </div>
-              <h2 className="text-3xl font-bold text-slate-900 mb-4">Visão</h2>
-              <p className="text-slate-500 max-w-md mx-auto">
-                Esta funcionalidade está em desenvolvimento. Em breve você poderá gerenciar sua visão e objetivos de longo prazo diretamente por aqui.
-              </p>
-              <div className="mt-8 px-4 py-2 bg-orange-50 text-orange-700 rounded-full text-sm font-medium border border-orange-200">
-                Em breve
+
+              {/* Segunda Metade: Visão e Objetivos (Placeholder) */}
+              <div className="flex flex-col h-full overflow-hidden">
+                <div className="mb-4 flex items-center justify-between shrink-0">
+                  <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                    <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600">
+                      <Eye size={18} />
+                    </div>
+                    Visão & Objetivos
+                  </h2>
+                </div>
+                <div className="flex-1 bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center justify-center p-8 text-center">
+                  <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mb-6 text-blue-500">
+                    <Eye size={40} />
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-900 mb-2">Planejamento de Longo Prazo</h3>
+                  <p className="text-slate-500 max-w-sm mx-auto text-sm">
+                    Esta área será dedicada ao seu quadro de visão, metas anuais e objetivos de vida. 
+                    Em breve você poderá conectar suas tarefas diárias com seu propósito maior.
+                  </p>
+                  <div className="mt-8 px-4 py-2 bg-blue-50 text-blue-700 rounded-full text-xs font-bold border border-blue-100">
+                    Funcionalidade em desenvolvimento
+                  </div>
+                </div>
               </div>
             </div>
           ) : activeView === 'studies' ? (

@@ -54,6 +54,9 @@ interface CalendarProps {
   onToggleAppointment: (id: string) => void;
   onDeleteAppointment: (id: string, deleteAllRecurring?: boolean) => void;
   onShowToast?: (message: string, type?: 'success' | 'error') => void;
+  initialViewType?: ViewType;
+  initialDate?: Date;
+  hideHeader?: boolean;
 }
 
 type ViewType = 'month' | 'week' | 'day';
@@ -91,10 +94,13 @@ export const Calendar: React.FC<CalendarProps> = ({
   onUpdateAppointment,
   onToggleAppointment,
   onDeleteAppointment,
-  onShowToast
+  onShowToast,
+  initialViewType = 'month',
+  initialDate = new Date(),
+  hideHeader = false
 }) => {
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewType, setViewType] = useState<ViewType>('month');
+  const [currentDate, setCurrentDate] = useState(initialDate);
+  const [viewType, setViewType] = useState<ViewType>(initialViewType);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
@@ -300,59 +306,61 @@ export const Calendar: React.FC<CalendarProps> = ({
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[calc(100vh-200px)]">
       {/* Header */}
-      <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-        <div className="flex items-center gap-4">
-          <h3 className="text-lg font-bold text-slate-800 capitalize">
-            {format(currentDate, 'MMMM yyyy', { locale: ptBR })}
-          </h3>
-          <div className="flex items-center bg-white border border-slate-200 rounded-lg p-1">
-            <button 
-              onClick={handlePrev}
-              className="p-1.5 hover:bg-slate-50 rounded-md text-slate-600 transition-colors"
-            >
-              <ChevronLeft size={18} />
-            </button>
-            <button 
-              onClick={() => setCurrentDate(new Date())}
-              className="px-3 py-1 text-xs font-bold text-slate-500 hover:text-orange-600 transition-colors"
-            >
-              Hoje
-            </button>
-            <button 
-              onClick={handleNext}
-              className="p-1.5 hover:bg-slate-50 rounded-md text-slate-600 transition-colors"
-            >
-              <ChevronRight size={18} />
-            </button>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <div className="flex bg-slate-100 p-1 rounded-xl">
-            {(['month', 'week', 'day'] as ViewType[]).map((type) => (
-              <button
-                key={type}
-                onClick={() => setViewType(type)}
-                className={cn(
-                  "px-4 py-1.5 text-xs font-bold rounded-lg transition-all",
-                  viewType === type 
-                    ? "bg-white text-orange-600 shadow-sm" 
-                    : "text-slate-500 hover:text-slate-700"
-                )}
+      {!hideHeader && (
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <div className="flex items-center gap-4">
+            <h3 className="text-lg font-bold text-slate-800 capitalize">
+              {format(currentDate, 'MMMM yyyy', { locale: ptBR })}
+            </h3>
+            <div className="flex items-center bg-white border border-slate-200 rounded-lg p-1">
+              <button 
+                onClick={handlePrev}
+                className="p-1.5 hover:bg-slate-50 rounded-md text-slate-600 transition-colors"
               >
-                {type === 'month' ? 'Mês' : type === 'week' ? 'Semana' : 'Dia'}
+                <ChevronLeft size={18} />
               </button>
-            ))}
+              <button 
+                onClick={() => setCurrentDate(new Date())}
+                className="px-3 py-1 text-xs font-bold text-slate-500 hover:text-orange-600 transition-colors"
+              >
+                Hoje
+              </button>
+              <button 
+                onClick={handleNext}
+                className="p-1.5 hover:bg-slate-50 rounded-md text-slate-600 transition-colors"
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
           </div>
-          <button 
-            onClick={() => handleAddClick(new Date())}
-            className="flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-orange-700 transition-all shadow-sm"
-          >
-            <Plus size={18} />
-            Novo
-          </button>
+
+          <div className="flex items-center gap-2">
+            <div className="flex bg-slate-100 p-1 rounded-xl">
+              {(['month', 'week', 'day'] as ViewType[]).map((type) => (
+                <button
+                  key={type}
+                  onClick={() => setViewType(type)}
+                  className={cn(
+                    "px-4 py-1.5 text-xs font-bold rounded-lg transition-all",
+                    viewType === type 
+                      ? "bg-white text-orange-600 shadow-sm" 
+                      : "text-slate-500 hover:text-slate-700"
+                  )}
+                >
+                  {type === 'month' ? 'Mês' : type === 'week' ? 'Semana' : 'Dia'}
+                </button>
+              ))}
+            </div>
+            <button 
+              onClick={() => handleAddClick(new Date())}
+              className="flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-orange-700 transition-all shadow-sm"
+            >
+              <Plus size={18} />
+              Novo
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Calendar Content */}
       <div className="flex-1 overflow-y-auto">
