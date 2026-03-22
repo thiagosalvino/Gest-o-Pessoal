@@ -8,9 +8,11 @@
         "uid": { "type": "string", "description": "Firebase Auth UID" },
         "email": { "type": "string", "description": "User email" },
         "role": { "type": "string", "enum": ["admin", "user"], "description": "User role (admin can see everything)" },
-        "status": { "type": "string", "enum": ["pending", "approved", "rejected", "blocked"], "description": "User approval status" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected", "blocked", "inactive"], "description": "User approval status" },
         "displayName": { "type": "string", "description": "User display name" },
         "birthDate": { "type": "string", "description": "User date of birth" },
+        "cpf": { "type": "string", "description": "User CPF" },
+        "phone": { "type": "string", "description": "User phone number" },
         "createdAt": { "type": "string", "description": "Registration date" },
         "lastLogin": { "type": "string", "description": "Last login date" }
       },
@@ -80,6 +82,32 @@
       },
       "required": ["id", "dayOfWeek", "type", "time", "userId"]
     },
+    "Goal": {
+      "title": "Goal",
+      "description": "A goal within a project",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "projectId": { "type": "string" },
+        "userId": { "type": "string" }
+      },
+      "required": ["id", "title", "projectId", "userId"]
+    },
+    "PomodoroSession": {
+      "title": "PomodoroSession",
+      "description": "A timed focus session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "classification": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "classification", "status", "createdAt"]
+    },
     "NotificationSettings": {
       "title": "NotificationSettings",
       "description": "User notification preferences",
@@ -135,9 +163,21 @@
       "schema": "StandardAlert",
       "description": "Standard alerts collection"
     },
+    "/goals/{goalId}": {
+      "schema": "Goal",
+      "description": "Goals collection"
+    },
+    "/pomodoroSessions/{sessionId}": {
+      "schema": "PomodoroSession",
+      "description": "Pomodoro sessions"
+    },
     "/settings/{userId}": {
       "schema": "NotificationSettings",
       "description": "User notification settings"
+    },
+    "/cpfs/{cpf}": {
+      "schema": "object",
+      "description": "CPF uniqueness mapping"
     }
   }
 }

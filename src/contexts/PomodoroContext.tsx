@@ -3,6 +3,7 @@ import { db } from '../firebase';
 import { collection, addDoc, updateDoc, doc, deleteDoc, onSnapshot, query, where, orderBy, deleteField } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
 import { PomodoroSession, PomodoroClassification, PomodoroNote } from '../types';
+import { handleFirestoreError, OperationType } from '../utils/firestoreErrorHandler';
 
 interface PomodoroContextType {
   timeLeft: number;
@@ -109,6 +110,8 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PomodoroSession));
       setSessions(docs);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'pomodoroSessions');
     });
 
     return () => unsubscribe();
@@ -183,10 +186,14 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
     } catch (error: any) {
       if (error.code === 'not-found' || error.message?.includes('No document to update')) {
-        const docRef = await addDoc(collection(db, 'pomodoroSessions'), sessionData);
-        setActiveSessionId(docRef.id);
+        try {
+          const docRef = await addDoc(collection(db, 'pomodoroSessions'), sessionData);
+          setActiveSessionId(docRef.id);
+        } catch (addError) {
+          handleFirestoreError(addError, OperationType.CREATE, 'pomodoroSessions');
+        }
       } else {
-        console.error('Error updating pomodoro session:', error);
+        handleFirestoreError(error, currentActiveSessionId ? OperationType.UPDATE : OperationType.CREATE, currentActiveSessionId ? `pomodoroSessions/${currentActiveSessionId}` : 'pomodoroSessions');
       }
     }
   }, [user, sessions]);
@@ -296,16 +303,24 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const deleteSession = async (id: string) => {
-    if (id === activeSessionId) {
-      setActiveSessionId(null);
+    try {
+      if (id === activeSessionId) {
+        setActiveSessionId(null);
+      }
+      await deleteDoc(doc(db, 'pomodoroSessions', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `pomodoroSessions/${id}`);
     }
-    await deleteDoc(doc(db, 'pomodoroSessions', id));
   };
 
   const updateSessionNote = async (sessionId: string, note: PomodoroNote | undefined) => {
-    await updateDoc(doc(db, 'pomodoroSessions', sessionId), { 
-      note: note === undefined ? deleteField() : note 
-    });
+    try {
+      await updateDoc(doc(db, 'pomodoroSessions', sessionId), { 
+        note: note === undefined ? deleteField() : note 
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `pomodoroSessions/${sessionId}`);
+    }
   };
 
   return (

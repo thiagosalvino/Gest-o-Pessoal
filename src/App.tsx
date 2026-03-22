@@ -43,6 +43,7 @@ import {
   XCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { handleFirestoreError, OperationType } from './utils/firestoreErrorHandler';
 import { 
   format, 
   startOfMonth, 
@@ -57,7 +58,7 @@ import {
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Project, Goal, Task, AppData, Appointment, MealEntry, TrainingEntry, NotificationSettings, StandardAlert } from './types';
-import { generateId, cn } from './utils';
+import { generateId, cn, validateCPF } from './utils';
 import { Dashboard } from './components/Dashboard';
 import { Calendar } from './components/Calendar';
 import { KanbanBoard } from './components/KanbanBoard';
@@ -67,6 +68,7 @@ import { PomodoroProvider } from './contexts/PomodoroContext';
 import { Login } from './components/Login';
 import { UserManagement } from './components/UserManagement';
 import { PomodoroTimer } from './components/PomodoroTimer';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 const PendingApproval = ({ status, onLogout }: { status: string; onLogout: () => void }) => {
   const getStatusConfig = () => {
@@ -84,6 +86,13 @@ const PendingApproval = ({ status, onLogout }: { status: string; onLogout: () =>
           title: 'Conta Bloqueada',
           message: 'Sua conta foi bloqueada. Entre em contato com o suporte para mais informações.',
           color: 'bg-slate-50 text-slate-700 border-slate-200'
+        };
+      case 'inactive':
+        return {
+          icon: <UserIcon size={48} className="text-gray-400" />,
+          title: 'Conta Inativa',
+          message: 'Sua conta está inativa no momento. Entre em contato com o administrador.',
+          color: 'bg-gray-50 text-gray-700 border-gray-200'
         };
       default:
         return {
@@ -115,7 +124,7 @@ const PendingApproval = ({ status, onLogout }: { status: string; onLogout: () =>
         </p>
         
         <div className={cn("p-4 rounded-2xl border mb-8 text-sm font-bold", config.color)}>
-          Status: {status === 'pending' ? 'Pendente' : status === 'rejected' ? 'Reprovado' : 'Bloqueado'}
+          Status: {status === 'pending' ? 'Pendente' : status === 'rejected' ? 'Reprovado' : status === 'blocked' ? 'Bloqueado' : status === 'inactive' ? 'Inativo' : 'Aguardando'}
         </div>
 
         <button
@@ -151,24 +160,64 @@ const ProfileModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
   const { userProfile, updateProfile } = useAuth();
   const [name, setName] = useState(userProfile?.displayName || '');
   const [birthDate, setBirthDate] = useState(userProfile?.birthDate || '');
+  const [cpf, setCpf] = useState(userProfile?.cpf || '');
+  const [phone, setPhone] = useState(userProfile?.phone || '');
   const [photoURL, setPhotoURL] = useState(userProfile?.photoURL || '');
   const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (userProfile) {
       setName(userProfile.displayName || '');
       setBirthDate(userProfile.birthDate || '');
+      setCpf(userProfile.cpf || '');
+      setPhone(userProfile.phone || '');
       setPhotoURL(userProfile.photoURL || '');
     }
   }, [userProfile]);
 
   const handleSave = async () => {
+    if (!name || !birthDate || !cpf || !phone) {
+      setError('Todos os campos são obrigatórios.');
+      return;
+    }
+
+    if (!validateCPF(cpf)) {
+      setError('CPF inválido. Insira 11 números válidos.');
+      return;
+    }
+
+    const cleanPhone = phone.replace(/[^\d]+/g, '');
+    if (cleanPhone.length < 11) {
+      setError('Celular/WhatsApp inválido. Use o formato 64999994444.');
+      return;
+    }
+
     setIsSaving(true);
+    setError(null);
     try {
-      await updateProfile({ displayName: name, birthDate, photoURL });
+      await updateProfile({ 
+        displayName: name, 
+        birthDate, 
+        photoURL, 
+        cpf: cpf.replace(/[^\d]+/g, ''), 
+        phone: cleanPhone 
+      });
       onClose();
-    } catch (error) {
-      console.error(error);
+    } catch (err: any) {
+      console.error(err);
+      if (err.code === 'auth/cpf-already-in-use') {
+        setError('Este CPF já está cadastrado.');
+      } else if (err.message?.startsWith('FIRESTORE_ERROR:')) {
+        try {
+          const errorData = JSON.parse(err.message.replace('FIRESTORE_ERROR:', ''));
+          setError(`Erro no Firestore: ${errorData.error}`);
+        } catch (e) {
+          setError('Erro ao salvar perfil no Firestore.');
+        }
+      } else {
+        setError('Erro ao salvar perfil.');
+      }
     } finally {
       setIsSaving(false);
     }
@@ -229,6 +278,30 @@ const ProfileModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
               className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
             />
           </div>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-400 uppercase ml-1">CPF</label>
+            <input 
+              type="text" 
+              maxLength={11}
+              value={cpf}
+              onChange={(e) => setCpf(e.target.value.replace(/[^\d]+/g, ''))}
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
+              placeholder="00000000000"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-400 uppercase ml-1">Celular/WhatsApp (+55)</label>
+            <input 
+              type="text" 
+              value={phone}
+              onChange={(e) => setPhone(e.target.value.replace(/[^\d]+/g, ''))}
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
+              placeholder="64999994444"
+            />
+          </div>
+          {error && (
+            <p className="text-xs font-bold text-red-500 ml-1">{error}</p>
+          )}
         </div>
         <div className="p-6 bg-slate-50 flex gap-3">
           <button 
@@ -250,57 +323,7 @@ const ProfileModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
   );
 };
 
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId: string | undefined;
-    email: string | null | undefined;
-    emailVerified: boolean | undefined;
-    isAnonymous: boolean | undefined;
-    tenantId: string | null | undefined;
-    providerInfo: {
-      providerId: string;
-      displayName: string | null;
-      email: string | null;
-      photoUrl: string | null;
-    }[];
-  }
-}
-
-const handleFirestoreError = (error: unknown, operationType: OperationType, path: string | null, auth: any) => {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map((provider: any) => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
-    },
-    operationType,
-    path
-  }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
-
+// handleFirestoreError and OperationType are now imported from utils
 function MainApp() {
   const { user, userProfile, loading, logout, isAdmin, isApproved } = useAuth();
   const [data, setData] = useState<AppData>({
@@ -329,6 +352,8 @@ function MainApp() {
       if (snapshot.exists()) {
         setData(prev => ({ ...prev, notificationSettings: snapshot.data() as NotificationSettings }));
       }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `settings/${user.uid}`);
     });
     unsubscribes.push(settingsUnsub);
 
@@ -338,6 +363,8 @@ function MainApp() {
       const unsub = onSnapshot(q, (snapshot) => {
         const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as any[];
         setData(prev => ({ ...prev, [colName]: items }));
+      }, (error) => {
+        handleFirestoreError(error, OperationType.GET, colName);
       });
       unsubscribes.push(unsub);
     });
@@ -520,6 +547,7 @@ function MainApp() {
       if (isMobile) setIsSidebarOpen(false);
       showToast('Projeto criado com sucesso!');
     } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'projects');
       showToast('Erro ao criar projeto', 'error');
     }
   };
@@ -538,74 +566,103 @@ function MainApp() {
       setShowAddGoal(false);
       showToast('Meta criada com sucesso!');
     } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'goals');
       showToast('Erro ao criar meta', 'error');
     }
   };
 
   const addTask = async () => {
     if (!newTaskTitle.trim() || !activeGoalId || !user) return;
-    const newTask = {
-      title: newTaskTitle,
-      completed: false,
-      status: 'todo',
-      goalId: activeGoalId,
-      createdAt: Date.now(),
-      dueDate: newTaskDate || null,
-      userId: user.uid
-    };
-    await addDoc(collection(db, 'tasks'), newTask);
-    setNewTaskTitle('');
-    setNewTaskDate('');
+    try {
+      const newTask = {
+        title: newTaskTitle,
+        completed: false,
+        status: 'todo',
+        goalId: activeGoalId,
+        createdAt: Date.now(),
+        dueDate: newTaskDate || null,
+        userId: user.uid
+      };
+      await addDoc(collection(db, 'tasks'), newTask);
+      setNewTaskTitle('');
+      setNewTaskDate('');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'tasks');
+    }
   };
 
   const saveEditTask = async () => {
     if (!editingTaskId || !editTaskTitle.trim()) return;
-    await updateDoc(doc(db, 'tasks', editingTaskId), {
-      title: editTaskTitle,
-      dueDate: editTaskDate || null
-    });
-    setEditingTaskId(null);
+    try {
+      await updateDoc(doc(db, 'tasks', editingTaskId), {
+        title: editTaskTitle,
+        dueDate: editTaskDate || null
+      });
+      setEditingTaskId(null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `tasks/${editingTaskId}`);
+    }
   };
 
   const toggleTask = async (taskId: string) => {
     const task = data.tasks.find(t => t.id === taskId);
     if (!task) return;
     const completed = !task.completed;
-    await updateDoc(doc(db, 'tasks', taskId), {
-      completed,
-      status: completed ? 'done' : 'todo'
-    });
+    try {
+      await updateDoc(doc(db, 'tasks', taskId), {
+        completed,
+        status: completed ? 'done' : 'todo'
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `tasks/${taskId}`);
+    }
   };
 
   const updateTaskStatus = async (taskId: string, status: 'todo' | 'in-progress' | 'done') => {
-    await updateDoc(doc(db, 'tasks', taskId), {
-      status,
-      completed: status === 'done'
-    });
+    try {
+      await updateDoc(doc(db, 'tasks', taskId), {
+        status,
+        completed: status === 'done'
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `tasks/${taskId}`);
+    }
   };
 
   const deleteTask = async (taskId: string) => {
-    await deleteDoc(doc(db, 'tasks', taskId));
+    try {
+      await deleteDoc(doc(db, 'tasks', taskId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `tasks/${taskId}`);
+    }
   };
 
   const deleteGoal = async (goalId: string) => {
-    await deleteDoc(doc(db, 'goals', goalId));
-    // Also delete tasks associated with this goal
-    const tasksToDelete = data.tasks.filter(t => t.goalId === goalId);
-    for (const task of tasksToDelete) {
-      await deleteDoc(doc(db, 'tasks', task.id));
+    try {
+      await deleteDoc(doc(db, 'goals', goalId));
+      // Also delete tasks associated with this goal
+      const tasksToDelete = data.tasks.filter(t => t.goalId === goalId);
+      for (const task of tasksToDelete) {
+        await deleteDoc(doc(db, 'tasks', task.id));
+      }
+      if (activeGoalId === goalId) setActiveGoalId(null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `goals/${goalId}`);
     }
-    if (activeGoalId === goalId) setActiveGoalId(null);
   };
 
   const deleteProject = async (projectId: string) => {
-    await deleteDoc(doc(db, 'projects', projectId));
-    // Associated goals and tasks should be deleted too for consistency
-    const goalsToDelete = data.goals.filter(g => g.projectId === projectId);
-    for (const goal of goalsToDelete) {
-      await deleteGoal(goal.id);
+    try {
+      await deleteDoc(doc(db, 'projects', projectId));
+      // Associated goals and tasks should be deleted too for consistency
+      const goalsToDelete = data.goals.filter(g => g.projectId === projectId);
+      for (const goal of goalsToDelete) {
+        await deleteGoal(goal.id);
+      }
+      if (activeProjectId === projectId) setActiveProjectId(data.projects.find(p => p.id !== projectId)?.id || '');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `projects/${projectId}`);
     }
-    if (activeProjectId === projectId) setActiveProjectId(data.projects.find(p => p.id !== projectId)?.id || '');
   };
 
   const calendarAppointments = useMemo(() => {
@@ -742,7 +799,6 @@ function MainApp() {
 
   const addAppointments = async (appointments: Appointment[]) => {
     if (!user) return;
-    console.log('Adding appointments:', appointments);
     try {
       const batch = writeBatch(db);
       appointments.forEach(app => {
@@ -757,7 +813,7 @@ function MainApp() {
       await batch.commit();
       showToast('Agenda atualizada!');
     } catch (error) {
-      console.error('Error adding appointments:', error);
+      handleFirestoreError(error, OperationType.WRITE, 'appointments/batch');
       showToast('Erro ao salvar agenda', 'error');
     }
   };
@@ -770,66 +826,74 @@ function MainApp() {
       await updateDoc(doc(db, 'appointments', id), cleanData);
       showToast('Compromisso atualizado!');
     } catch (error) {
-      console.error('Error updating appointment:', error);
+      handleFirestoreError(error, OperationType.UPDATE, `appointments/${appointment.id}`);
       showToast('Erro ao atualizar compromisso', 'error');
     }
   };
 
   const toggleAppointment = async (id: string) => {
-    // Handle diet virtual appointments
-    if (id.startsWith('diet_')) {
-      const [, mealId, dateStr] = id.split('_');
-      const meal = data.diet.find(m => m.id === mealId);
-      if (meal) {
-        const completedDates = meal.completedDates || [];
-        const isCompleted = completedDates.includes(dateStr);
-        const newDates = isCompleted 
-          ? completedDates.filter(d => d !== dateStr)
-          : [...completedDates, dateStr];
-        await updateDoc(doc(db, 'diet', mealId), { completedDates: newDates });
+    try {
+      // Handle diet virtual appointments
+      if (id.startsWith('diet_')) {
+        const [, mealId, dateStr] = id.split('_');
+        const meal = data.diet.find(m => m.id === mealId);
+        if (meal) {
+          const completedDates = meal.completedDates || [];
+          const isCompleted = completedDates.includes(dateStr);
+          const newDates = isCompleted 
+            ? completedDates.filter(d => d !== dateStr)
+            : [...completedDates, dateStr];
+          await updateDoc(doc(db, 'diet', mealId), { completedDates: newDates });
+        }
+        return;
       }
-      return;
-    }
 
-    // Handle training virtual appointments
-    if (id.startsWith('training_')) {
-      const [, trainId, dateStr] = id.split('_');
-      const train = data.training.find(t => t.id === trainId);
-      if (train) {
-        const completedDates = train.completedDates || [];
-        const isCompleted = completedDates.includes(dateStr);
-        const newDates = isCompleted 
-          ? completedDates.filter(d => d !== dateStr)
-          : [...completedDates, dateStr];
-        await updateDoc(doc(db, 'training', trainId), { completedDates: newDates });
+      // Handle training virtual appointments
+      if (id.startsWith('training_')) {
+        const [, trainId, dateStr] = id.split('_');
+        const train = data.training.find(t => t.id === trainId);
+        if (train) {
+          const completedDates = train.completedDates || [];
+          const isCompleted = completedDates.includes(dateStr);
+          const newDates = isCompleted 
+            ? completedDates.filter(d => d !== dateStr)
+            : [...completedDates, dateStr];
+          await updateDoc(doc(db, 'training', trainId), { completedDates: newDates });
+        }
+        return;
       }
-      return;
-    }
 
-    const task = data.tasks.find(t => t.id === id);
-    if (task) {
-      await updateDoc(doc(db, 'tasks', id), { completed: !task.completed });
-      return;
-    }
+      const task = data.tasks.find(t => t.id === id);
+      if (task) {
+        await updateDoc(doc(db, 'tasks', id), { completed: !task.completed });
+        return;
+      }
 
-    const app = data.appointments.find(a => a.id === id);
-    if (app) {
-      await updateDoc(doc(db, 'appointments', id), { completed: !app.completed });
+      const app = data.appointments.find(a => a.id === id);
+      if (app) {
+        await updateDoc(doc(db, 'appointments', id), { completed: !app.completed });
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `appointments/${id}`);
     }
   };
 
   const deleteAppointment = async (id: string, deleteAllRecurring?: boolean) => {
-    if (deleteAllRecurring) {
-      const target = data.appointments.find(a => a.id === id);
-      if (target?.recurrenceId) {
-        const appsToDelete = data.appointments.filter(a => a.recurrenceId === target.recurrenceId && a.date >= target.date);
-        for (const app of appsToDelete) {
-          await deleteDoc(doc(db, 'appointments', app.id));
+    try {
+      if (deleteAllRecurring) {
+        const target = data.appointments.find(a => a.id === id);
+        if (target?.recurrenceId) {
+          const appsToDelete = data.appointments.filter(a => a.recurrenceId === target.recurrenceId && a.date >= target.date);
+          for (const app of appsToDelete) {
+            await deleteDoc(doc(db, 'appointments', app.id));
+          }
+          return;
         }
-        return;
       }
+      await deleteDoc(doc(db, 'appointments', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `appointments/${id}`);
     }
-    await deleteDoc(doc(db, 'appointments', id));
   };
 
   const updateDiet = async (dietList: MealEntry[]) => {
@@ -856,6 +920,7 @@ function MainApp() {
       }
       showToast('Dieta salva com sucesso!');
     } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'diet');
       showToast('Erro ao salvar dieta', 'error');
     }
   };
@@ -884,6 +949,7 @@ function MainApp() {
       }
       showToast('Treino salvo com sucesso!');
     } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'training');
       showToast('Erro ao salvar treino', 'error');
     }
   };
@@ -894,7 +960,7 @@ function MainApp() {
       await setDoc(doc(db, 'settings', user.uid), settings);
       setData(prev => ({ ...prev, notificationSettings: settings }));
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `settings/${user.uid}`, { currentUser: user });
+      handleFirestoreError(error, OperationType.WRITE, `settings/${user.uid}`);
     }
   };
 
@@ -1836,7 +1902,7 @@ function MainApp() {
               onUpdateTraining={updateTraining} 
             />
           ) : (activeView === 'users' && isAdmin) ? (
-            <UserManagement />
+            <UserManagement showToast={showToast} />
           ) : activeView === 'finance' ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <div className="w-24 h-24 bg-orange-100 rounded-full flex items-center justify-center mb-6 text-orange-500">
@@ -2130,7 +2196,9 @@ export default function App() {
   return (
     <AuthProvider>
       <PomodoroProvider>
-        <MainApp />
+        <ErrorBoundary>
+          <MainApp />
+        </ErrorBoundary>
       </PomodoroProvider>
     </AuthProvider>
   );
