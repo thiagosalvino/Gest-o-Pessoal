@@ -474,7 +474,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                                   </span>
                                 </div>
                                 {app.category !== 'project' && app.category !== 'diet' && app.category !== 'training' && (
-                                  <div className="flex items-center opacity-0 group-hover:opacity-100 transition-all shrink-0">
+                                  <div className="flex items-center lg:opacity-0 lg:group-hover:opacity-100 opacity-100 transition-all shrink-0">
                                     <button 
                                       onClick={(e) => {
                                         e.stopPropagation();
@@ -588,7 +588,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                         </div>
 
                         {app.category !== 'project' && app.category !== 'diet' && app.category !== 'training' && (
-                          <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all shrink-0">
+                          <div className="flex items-center gap-2 lg:opacity-0 lg:group-hover:opacity-100 opacity-100 transition-all shrink-0">
                             <button 
                               onClick={() => handleEditClick(app)}
                               className="p-2 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-xl transition-all"

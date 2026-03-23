@@ -239,7 +239,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ task, projec
 
                   <button 
                     onClick={() => deleteChecklistItem(item.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all shrink-0"
+                    className="lg:opacity-0 lg:group-hover:opacity-100 opacity-100 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all shrink-0"
                   >
                     <Trash2 size={16} />
                   </button>

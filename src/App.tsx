@@ -426,10 +426,22 @@ function MainApp() {
 
         if (diffMinutes >= alert.cycleMinutes) {
           // Trigger notification
-          new Notification("Lembrete Programado", {
-            body: alert.description,
-            icon: "/favicon.ico"
-          });
+          if (data.notificationSettings?.browserNotificationsEnabled && Notification.permission === 'granted') {
+            new Notification("Lembrete Programado", {
+              body: alert.description,
+              icon: "/favicon.ico"
+            });
+          }
+
+          // Add to in-app notifications
+          const newNotif = {
+            id: generateId(),
+            title: "Lembrete Programado",
+            message: alert.description,
+            time: Date.now(),
+            read: false
+          };
+          setNotifications(prev => [newNotif, ...prev].slice(0, 20));
 
           // Update lastTriggeredAt
           try {
@@ -1398,7 +1410,7 @@ function MainApp() {
                   </button>
                   <button 
                     onClick={() => deleteProject(project.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-300 hover:text-red-500 transition-all"
+                    className="lg:opacity-0 lg:group-hover:opacity-100 opacity-100 p-1.5 text-slate-300 hover:text-red-500 transition-all"
                   >
                     <Trash2 size={14} />
                   </button>
@@ -1497,7 +1509,7 @@ function MainApp() {
                                 </button>
                                 <button 
                                   onClick={() => deleteGoal(goal.id)}
-                                  className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-300 hover:text-red-500 transition-all"
+                                  className="lg:opacity-0 lg:group-hover:opacity-100 opacity-100 p-1.5 text-slate-300 hover:text-red-500 transition-all"
                                 >
                                   <Trash2 size={14} />
                                 </button>
@@ -1876,7 +1888,7 @@ function MainApp() {
                               showToast('Erro ao remover alerta', 'error');
                             }
                           }}
-                          className="p-2 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                          className="p-2 text-slate-300 hover:text-red-500 transition-colors lg:opacity-0 lg:group-hover:opacity-100 opacity-100"
                         >
                           <Trash2 size={18} />
                         </button>
@@ -2375,7 +2387,7 @@ function MainApp() {
                             </div>
 
                             {editingTaskId !== task.id && (
-                              <div className="flex items-center opacity-0 group-hover:opacity-100 transition-all">
+                              <div className="flex items-center lg:opacity-0 lg:group-hover:opacity-100 opacity-100 transition-all">
                                 <button 
                                   onClick={(e) => {
                                     e.stopPropagation();
