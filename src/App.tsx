@@ -42,7 +42,8 @@ import {
   Ban,
   XCircle,
   Tag,
-  GripVertical
+  GripVertical,
+  Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { handleFirestoreError, OperationType } from './utils/firestoreErrorHandler';
@@ -483,6 +484,33 @@ function MainApp() {
   const whatsappNotifiedRef = React.useRef<Set<string>>(new Set());
   const desktopNotificationRef = React.useRef<HTMLDivElement>(null);
   const mobileNotificationRef = React.useRef<HTMLDivElement>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallGuide, setShowInstallGuide] = useState(false);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setDeferredPrompt(null);
+      }
+    } else {
+      setShowInstallGuide(true);
+    }
+  };
 
   // Close notifications when clicking outside
   useEffect(() => {
@@ -1486,6 +1514,69 @@ function MainApp() {
             </div>
           )}
         </nav>
+
+        {/* Install App Button */}
+        {isMobile && (
+          <div className="px-4 mb-2">
+            <button
+              onClick={handleInstallClick}
+              className="w-full flex items-center gap-3 px-3 py-2 bg-orange-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-orange-200 hover:bg-orange-700 transition-all"
+            >
+              <Download size={18} />
+              Instalar Aplicativo
+            </button>
+          </div>
+        )}
+
+        {/* Install Guide Modal */}
+        <AnimatePresence>
+          {showInstallGuide && (
+            <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden"
+              >
+                <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-orange-50/50">
+                  <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <Download size={20} className="text-orange-600" />
+                    Como Instalar
+                  </h2>
+                  <button onClick={() => setShowInstallGuide(false)} className="p-2 hover:bg-white rounded-xl transition-colors">
+                    <X size={20} className="text-slate-400" />
+                  </button>
+                </div>
+                <div className="p-6 space-y-6">
+                  <div className="flex items-start gap-4">
+                    <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 font-bold shrink-0">1</div>
+                    <p className="text-sm text-slate-600 leading-relaxed">
+                      Toque nos <strong>três pontinhos</strong> (Chrome) ou no ícone de <strong>Compartilhar</strong> (Safari) na barra do navegador.
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-4">
+                    <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 font-bold shrink-0">2</div>
+                    <p className="text-sm text-slate-600 leading-relaxed">
+                      Procure pela opção <strong>"Instalar aplicativo"</strong> ou <strong>"Adicionar à tela de início"</strong>.
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-4">
+                    <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 font-bold shrink-0">3</div>
+                    <p className="text-sm text-slate-600 leading-relaxed">
+                      Confirme e pronto! O <strong>OrganizeApp</strong> aparecerá na sua tela inicial como um aplicativo nativo.
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => setShowInstallGuide(false)}
+                    className="w-full py-3 bg-slate-800 text-white rounded-2xl font-bold hover:bg-slate-700 transition-all mt-4"
+                  >
+                    Entendi
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
 
         {/* User Profile at Bottom */}
         <div className="p-4 border-t border-slate-100 w-[288px]">
