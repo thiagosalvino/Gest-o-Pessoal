@@ -40,7 +40,9 @@ import {
   Clock as ClockIcon,
   AlertCircle,
   Ban,
-  XCircle
+  XCircle,
+  Tag,
+  GripVertical
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { handleFirestoreError, OperationType } from './utils/firestoreErrorHandler';
@@ -57,12 +59,15 @@ import {
   subMonths
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Project, Goal, Task, AppData, Appointment, MealEntry, TrainingEntry, NotificationSettings, StandardAlert } from './types';
-import { generateId, cn, validateCPF } from './utils';
+import { Project, Goal, Task, AppData, Appointment, MealEntry, TrainingEntry, NotificationSettings, StandardAlert, AppointmentCategory } from './types';
+import { generateId, cn, validateCPF, sanitizeFirestoreData } from './utils';
+import { CATEGORIES } from './constants';
 import { Dashboard } from './components/Dashboard';
 import { Calendar } from './components/Calendar';
 import { KanbanBoard } from './components/KanbanBoard';
+import { TaskDetailsModal } from './components/TaskDetailsModal';
 import { DietTraining } from './components/DietTraining';
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { PomodoroProvider } from './contexts/PomodoroContext';
 import { Login } from './components/Login';
@@ -447,9 +452,14 @@ function MainApp() {
   const [newGoalTitle, setNewGoalTitle] = useState('');
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDate, setNewTaskDate] = useState('');
+  const [newTaskTime, setNewTaskTime] = useState('');
+  const [newTaskCategory, setNewTaskCategory] = useState<AppointmentCategory | string>('task');
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editTaskTitle, setEditTaskTitle] = useState('');
   const [editTaskDate, setEditTaskDate] = useState('');
+  const [editTaskTime, setEditTaskTime] = useState('');
+  const [editTaskCategory, setEditTaskCategory] = useState<AppointmentCategory | string>('task');
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [showAddProject, setShowAddProject] = useState(false);
   const [showAddGoal, setShowAddGoal] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -520,7 +530,7 @@ function MainApp() {
   [data.projects, activeProjectId]);
 
   const projectGoals = useMemo(() => 
-    data.goals.filter(g => g.projectId === activeProjectId),
+    data.goals.filter(g => g.projectId === activeProjectId).sort((a, b) => (a.order || 0) - (b.order || 0) || a.createdAt - b.createdAt),
   [data.goals, activeProjectId]);
 
   const filteredTasks = useMemo(() => {
@@ -552,6 +562,25 @@ function MainApp() {
     }
   };
 
+  const handleGoalDragEnd = async (result: DropResult) => {
+    if (!result.destination) return;
+    
+    const items: Goal[] = Array.from(projectGoals);
+    const [reorderedItem] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, reorderedItem);
+
+    // Update local state optimistically? We don't have local state for goals, it's derived from `data.goals`.
+    // We should update Firestore for each changed goal.
+    try {
+      const updates = items.map((goal, index) => {
+        return updateDoc(doc(db, 'goals', goal.id), { order: index });
+      });
+      await Promise.all(updates);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'goals');
+    }
+  };
+
   const addGoal = async () => {
     if (!newGoalTitle.trim() || !activeProjectId || !user) return;
     try {
@@ -574,6 +603,10 @@ function MainApp() {
   const addTask = async () => {
     if (!newTaskTitle.trim() || !activeGoalId || !user) return;
     try {
+      const goal = data.goals.find(g => g.id === activeGoalId);
+      const project = goal ? data.projects.find(p => p.id === goal.projectId) : null;
+      const category = project ? `PROJETO - ${project.title}` : newTaskCategory;
+
       const newTask = {
         title: newTaskTitle,
         completed: false,
@@ -581,11 +614,15 @@ function MainApp() {
         goalId: activeGoalId,
         createdAt: Date.now(),
         dueDate: newTaskDate || null,
+        dueTime: newTaskTime || null,
+        category: category,
         userId: user.uid
       };
-      await addDoc(collection(db, 'tasks'), newTask);
+      await addDoc(collection(db, 'tasks'), sanitizeFirestoreData(newTask));
       setNewTaskTitle('');
       setNewTaskDate('');
+      setNewTaskTime('');
+      setNewTaskCategory('task');
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'tasks');
     }
@@ -594,13 +631,29 @@ function MainApp() {
   const saveEditTask = async () => {
     if (!editingTaskId || !editTaskTitle.trim()) return;
     try {
-      await updateDoc(doc(db, 'tasks', editingTaskId), {
+      const task = data.tasks.find(t => t.id === editingTaskId);
+      const goal = task ? data.goals.find(g => g.id === task.goalId) : null;
+      const project = goal ? data.projects.find(p => p.id === goal.projectId) : null;
+      const category = project ? `PROJETO - ${project.title}` : editTaskCategory;
+
+      await updateDoc(doc(db, 'tasks', editingTaskId), sanitizeFirestoreData({
         title: editTaskTitle,
-        dueDate: editTaskDate || null
-      });
+        dueDate: editTaskDate || null,
+        dueTime: editTaskTime || null,
+        category: category
+      }));
       setEditingTaskId(null);
+      setEditTaskTime('');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `tasks/${editingTaskId}`);
+    }
+  };
+
+  const saveTaskDetails = async (taskId: string, updates: Partial<Task>) => {
+    try {
+      await updateDoc(doc(db, 'tasks', taskId), sanitizeFirestoreData(updates));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `tasks/${taskId}`);
     }
   };
 
@@ -676,7 +729,7 @@ function MainApp() {
           title: t.title,
           description: `${project?.title || 'Projeto'} | ${goal?.title || 'Meta'}`,
           date: t.dueDate!,
-          time: t.time || '12:00',
+          time: t.dueTime || '12:00',
           category: 'project',
           completed: t.completed,
           createdAt: t.createdAt
@@ -822,8 +875,20 @@ function MainApp() {
     if (!user) return;
     try {
       const { id, ...rest } = appointment;
-      const cleanData = JSON.parse(JSON.stringify(rest));
-      await updateDoc(doc(db, 'appointments', id), cleanData);
+      
+      // Check if it's a task
+      const task = data.tasks.find(t => t.id === id);
+      if (task) {
+        await updateDoc(doc(db, 'tasks', id), sanitizeFirestoreData({
+          title: appointment.title,
+          dueDate: appointment.date,
+          dueTime: appointment.time
+        }));
+        showToast('Tarefa atualizada!');
+        return;
+      }
+
+      await updateDoc(doc(db, 'appointments', id), sanitizeFirestoreData(rest));
       showToast('Compromisso atualizado!');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `appointments/${appointment.id}`);
@@ -880,6 +945,14 @@ function MainApp() {
 
   const deleteAppointment = async (id: string, deleteAllRecurring?: boolean) => {
     try {
+      // Check if it's a task
+      const task = data.tasks.find(t => t.id === id);
+      if (task) {
+        await deleteDoc(doc(db, 'tasks', id));
+        showToast('Tarefa excluída!');
+        return;
+      }
+
       if (deleteAllRecurring) {
         const target = data.appointments.find(a => a.id === id);
         if (target?.recurrenceId) {
@@ -891,6 +964,7 @@ function MainApp() {
         }
       }
       await deleteDoc(doc(db, 'appointments', id));
+      showToast('Compromisso excluído!');
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `appointments/${id}`);
     }
@@ -913,7 +987,7 @@ function MainApp() {
       for (const meal of dietList) {
         if (currentIds.includes(meal.id)) {
           const { id, ...rest } = meal;
-          await updateDoc(doc(db, 'diet', id), rest);
+          await updateDoc(doc(db, 'diet', id), sanitizeFirestoreData(rest));
         } else {
           await addDoc(collection(db, 'diet'), { ...meal, userId: user.uid });
         }
@@ -942,7 +1016,7 @@ function MainApp() {
       for (const train of trainingList) {
         if (currentIds.includes(train.id)) {
           const { id, ...rest } = train;
-          await updateDoc(doc(db, 'training', id), rest);
+          await updateDoc(doc(db, 'training', id), sanitizeFirestoreData(rest));
         } else {
           await addDoc(collection(db, 'training'), { ...train, userId: user.uid });
         }
@@ -1359,28 +1433,55 @@ function MainApp() {
                   <Layout size={16} />
                   Visão Geral
                 </button>
-                {projectGoals.map(goal => (
-                  <div key={goal.id} className="group flex items-center">
-                    <button
-                      onClick={() => setActiveGoalId(goal.id)}
-                      className={cn(
-                        "flex-1 flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
-                        activeGoalId === goal.id 
-                          ? "bg-orange-50 text-orange-700" 
-                          : "text-slate-600 hover:bg-slate-50"
-                      )}
-                    >
-                      <GoalIcon size={16} />
-                      <span className="truncate">{goal.title}</span>
-                    </button>
-                    <button 
-                      onClick={() => deleteGoal(goal.id)}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-300 hover:text-red-500 transition-all"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                ))}
+                <DragDropContext onDragEnd={handleGoalDragEnd}>
+                  <Droppable droppableId="goals-list">
+                    {(provided) => (
+                      <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-1">
+                        {projectGoals.map((goal, index) => (
+                          // @ts-expect-error - React 19 types issue with Draggable key
+                          <Draggable key={goal.id} draggableId={goal.id} index={index}>
+                            {(provided, snapshot) => (
+                              <div
+                                ref={provided.innerRef}
+                                {...provided.draggableProps}
+                                className={cn(
+                                  "group flex items-center bg-white rounded-lg transition-all",
+                                  snapshot.isDragging && "shadow-md z-50"
+                                )}
+                              >
+                                <div
+                                  {...provided.dragHandleProps}
+                                  className="p-2 text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing"
+                                >
+                                  <GripVertical size={14} />
+                                </div>
+                                <button
+                                  onClick={() => setActiveGoalId(goal.id)}
+                                  className={cn(
+                                    "flex-1 flex items-center gap-3 px-2 py-2 rounded-r-lg text-sm font-medium transition-all",
+                                    activeGoalId === goal.id 
+                                      ? "bg-orange-50 text-orange-700" 
+                                      : "text-slate-600 hover:bg-slate-50"
+                                  )}
+                                >
+                                  <GoalIcon size={16} />
+                                  <span className="truncate">{goal.title}</span>
+                                </button>
+                                <button 
+                                  onClick={() => deleteGoal(goal.id)}
+                                  className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-300 hover:text-red-500 transition-all"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            )}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
+                      </div>
+                    )}
+                  </Droppable>
+                </DragDropContext>
               </div>
             </div>
           )}
@@ -1844,7 +1945,7 @@ function MainApp() {
                 </div>
                 <div className="flex-1 overflow-hidden rounded-3xl border border-slate-200 shadow-sm bg-white">
                   <Calendar 
-                    appointments={data.appointments}
+                    appointments={calendarAppointments}
                     onAddAppointments={addAppointments}
                     onUpdateAppointment={updateAppointment}
                     onToggleAppointment={toggleAppointment}
@@ -2024,6 +2125,24 @@ function MainApp() {
                           className="p-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all text-slate-600"
                           onKeyDown={(e) => e.key === 'Enter' && addTask()}
                         />
+                        <input
+                          type="time"
+                          value={newTaskTime}
+                          onChange={(e) => setNewTaskTime(e.target.value)}
+                          className="p-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all text-slate-600"
+                          onKeyDown={(e) => e.key === 'Enter' && addTask()}
+                        />
+                        {!activeGoalId && !activeProjectId && (
+                          <select
+                            value={newTaskCategory}
+                            onChange={(e) => setNewTaskCategory(e.target.value as AppointmentCategory)}
+                            className="p-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all text-slate-600"
+                          >
+                            {CATEGORIES.map(cat => (
+                              <option key={cat.value} value={cat.value}>{cat.label}</option>
+                            ))}
+                          </select>
+                        )}
                         <button 
                           onClick={addTask}
                           className="p-4 bg-orange-500 text-white rounded-xl hover:bg-orange-600 transition-all flex items-center justify-center shadow-lg shadow-orange-100"
@@ -2046,6 +2165,7 @@ function MainApp() {
                       onUpdateTaskStatus={updateTaskStatus}
                       onDeleteTask={deleteTask}
                       onToggleTask={toggleTask}
+                      onTaskDoubleClick={(task) => setSelectedTask(task)}
                     />
                   ) : (
                     <div className="space-y-2">
@@ -2065,9 +2185,11 @@ function MainApp() {
                                 ? "bg-slate-50 border-slate-100 opacity-60" 
                                 : "bg-white border-slate-200 hover:border-orange-300 hover:shadow-md"
                             )}
-                            onClick={() => toggleTask(task.id)}
+                            onDoubleClick={() => setSelectedTask(task)}
                           >
-                            <button className={cn(
+                            <button 
+                              onClick={() => toggleTask(task.id)}
+                              className={cn(
                               "transition-colors",
                               task.completed ? "text-emerald-500" : "text-slate-300 group-hover:text-orange-400"
                             )}>
@@ -2092,6 +2214,24 @@ function MainApp() {
                                     className="p-2 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm text-slate-600"
                                     onKeyDown={e => e.key === 'Enter' && saveEditTask()}
                                   />
+                                  <input
+                                    type="time"
+                                    value={editTaskTime}
+                                    onChange={e => setEditTaskTime(e.target.value)}
+                                    className="p-2 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm text-slate-600"
+                                    onKeyDown={e => e.key === 'Enter' && saveEditTask()}
+                                  />
+                                  {!activeGoalId && !activeProjectId && (
+                                    <select
+                                      value={editTaskCategory}
+                                      onChange={(e) => setEditTaskCategory(e.target.value as AppointmentCategory)}
+                                      className="p-2 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm text-slate-600"
+                                    >
+                                      {CATEGORIES.map(cat => (
+                                        <option key={cat.value} value={cat.value}>{cat.label}</option>
+                                      ))}
+                                    </select>
+                                  )}
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -2111,15 +2251,31 @@ function MainApp() {
                                     {task.title}
                                   </p>
                                   <div className="flex items-center gap-2 mt-1">
+                                    {task.category && (
+                                      <span className={cn(
+                                        "text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1",
+                                        CATEGORIES.find(c => c.value === task.category)?.color || "text-blue-500 bg-blue-50"
+                                      )}>
+                                        {React.createElement(CATEGORIES.find(c => c.value === task.category)?.icon || FolderPlus, { size: 10 })}
+                                        {CATEGORIES.find(c => c.value === task.category)?.label || task.category}
+                                      </span>
+                                    )}
                                     {!activeGoalId && (
                                       <span className="text-[10px] font-bold text-orange-400 uppercase tracking-wider">
                                         {data.goals.find(g => g.id === task.goalId)?.title}
                                       </span>
                                     )}
-                                    {task.dueDate && (
+                                    {(task.dueDate || task.dueTime) && (
                                       <span className="text-[10px] font-medium text-slate-500 flex items-center gap-1">
                                         <CalendarIcon size={10} />
-                                        {new Date(task.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                        {task.dueDate && new Date(task.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                        {task.dueTime && ` às ${task.dueTime}`}
+                                      </span>
+                                    )}
+                                    {task.checklist && task.checklist.length > 0 && (
+                                      <span className="text-[10px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded flex items-center gap-1">
+                                        <CheckCircle2 size={10} />
+                                        {task.checklist.length}/{task.checklist.filter(i => i.completed).length}
                                       </span>
                                     )}
                                   </div>
@@ -2135,6 +2291,8 @@ function MainApp() {
                                     setEditingTaskId(task.id);
                                     setEditTaskTitle(task.title);
                                     setEditTaskDate(task.dueDate || '');
+                                    setEditTaskTime(task.dueTime || '');
+                                    setEditTaskCategory(task.category || 'task');
                                   }}
                                   className="p-2 text-slate-300 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-all"
                                 >
@@ -2188,6 +2346,16 @@ function MainApp() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {selectedTask && (
+        <TaskDetailsModal
+          task={selectedTask}
+          projects={data.projects}
+          goals={data.goals}
+          onClose={() => setSelectedTask(null)}
+          onSave={saveTaskDetails}
+        />
+      )}
     </div>
   );
 }

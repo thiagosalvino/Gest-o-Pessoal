@@ -1,14 +1,16 @@
 import React from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Task, TaskStatus } from '../types';
-import { CheckCircle2, Circle, Trash2, GripVertical } from 'lucide-react';
+import { CheckCircle2, Circle, Trash2, GripVertical, Tag } from 'lucide-react';
 import { cn } from '../utils';
+import { CATEGORIES } from '../constants';
 
 interface KanbanBoardProps {
   tasks: Task[];
   onUpdateTaskStatus: (taskId: string, status: TaskStatus) => void;
   onDeleteTask: (taskId: string) => void;
   onToggleTask: (taskId: string) => void;
+  onTaskDoubleClick: (task: Task) => void;
 }
 
 const COLUMNS: { id: TaskStatus; title: string; color: string }[] = [
@@ -21,7 +23,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   tasks,
   onUpdateTaskStatus,
   onDeleteTask,
-  onToggleTask
+  onToggleTask,
+  onTaskDoubleClick
 }) => {
   const handleDragEnd = (result: DropResult) => {
     const { destination, source, draggableId } = result;
@@ -73,8 +76,9 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                             <div
                               ref={provided.innerRef}
                               {...provided.draggableProps}
+                              onDoubleClick={() => onTaskDoubleClick(task)}
                               className={cn(
-                                "group bg-white p-4 rounded-xl border shadow-sm transition-all",
+                                "group bg-white p-4 rounded-xl border shadow-sm transition-all cursor-pointer",
                                 snapshot.isDragging ? "shadow-lg border-orange-300 rotate-2 scale-105" : "border-slate-200 hover:border-orange-200 hover:shadow-md",
                                 task.completed && column.id === 'done' ? "opacity-70" : ""
                               )}
@@ -88,7 +92,10 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                                 </div>
                                 
                                 <button 
-                                  onClick={() => onToggleTask(task.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onToggleTask(task.id);
+                                  }}
                                   className={cn(
                                     "mt-0.5 transition-colors shrink-0",
                                     task.completed ? "text-emerald-500" : "text-slate-300 hover:text-orange-400"
@@ -104,10 +111,44 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                                   )}>
                                     {task.title}
                                   </p>
+                                  {task.category && (() => {
+                                    const cat = CATEGORIES.find(c => c.value === task.category);
+                                    const Icon = cat?.icon || Tag;
+                                    return (
+                                      <div className="mt-2 flex items-center">
+                                        <span className={cn(
+                                          "text-[10px] px-2 py-0.5 rounded-full border font-medium flex items-center gap-1 w-fit",
+                                          cat?.color || "bg-orange-50 text-orange-700 border-orange-100"
+                                        )}>
+                                          <Icon size={10} />
+                                          {cat?.label || task.category}
+                                        </span>
+                                      </div>
+                                    );
+                                  })()}
+                                  {(task.dueDate || task.dueTime || (task.checklist && task.checklist.length > 0)) && (
+                                    <div className="mt-2 flex items-center gap-2">
+                                      {(task.dueDate || task.dueTime) && (
+                                        <div className="flex items-center gap-1 text-[10px] font-medium text-slate-400">
+                                          {task.dueDate && task.dueDate.split('-').reverse().join('/')}
+                                          {task.dueTime && ` às ${task.dueTime}`}
+                                        </div>
+                                      )}
+                                      {task.checklist && task.checklist.length > 0 && (
+                                        <div className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 bg-slate-50 text-slate-500 rounded border border-slate-100">
+                                          <CheckCircle2 size={10} />
+                                          {task.checklist.length}/{task.checklist.filter(i => i.completed).length}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
 
                                 <button
-                                  onClick={() => onDeleteTask(task.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDeleteTask(task.id);
+                                  }}
                                   className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all shrink-0"
                                 >
                                   <Trash2 size={16} />

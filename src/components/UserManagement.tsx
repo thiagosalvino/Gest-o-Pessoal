@@ -26,6 +26,7 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'motion/react';
 import { handleFirestoreError, OperationType } from '../utils/firestoreErrorHandler';
+import { sanitizeFirestoreData } from '../utils';
 
 interface UserProfile {
   uid: string;

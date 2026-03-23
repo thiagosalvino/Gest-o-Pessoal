@@ -4,6 +4,7 @@ import { collection, addDoc, updateDoc, doc, deleteDoc, onSnapshot, query, where
 import { useAuth } from './AuthContext';
 import { PomodoroSession, PomodoroClassification, PomodoroNote } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/firestoreErrorHandler';
+import { sanitizeFirestoreData } from '../utils';
 
 interface PomodoroContextType {
   timeLeft: number;
@@ -179,15 +180,15 @@ export const PomodoroProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     try {
       if (currentActiveSessionId) {
-        await updateDoc(doc(db, 'pomodoroSessions', currentActiveSessionId), sessionData);
+        await updateDoc(doc(db, 'pomodoroSessions', currentActiveSessionId), sanitizeFirestoreData(sessionData));
       } else {
-        const docRef = await addDoc(collection(db, 'pomodoroSessions'), sessionData);
+        const docRef = await addDoc(collection(db, 'pomodoroSessions'), sanitizeFirestoreData(sessionData));
         setActiveSessionId(docRef.id);
       }
     } catch (error: any) {
       if (error.code === 'not-found' || error.message?.includes('No document to update')) {
         try {
-          const docRef = await addDoc(collection(db, 'pomodoroSessions'), sessionData);
+          const docRef = await addDoc(collection(db, 'pomodoroSessions'), sanitizeFirestoreData(sessionData));
           setActiveSessionId(docRef.id);
         } catch (addError) {
           handleFirestoreError(addError, OperationType.CREATE, 'pomodoroSessions');

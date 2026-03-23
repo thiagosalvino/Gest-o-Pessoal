@@ -2,6 +2,13 @@ export type Status = 'pending' | 'completed';
 
 export type TaskStatus = 'todo' | 'in-progress' | 'done';
 
+export interface ChecklistItem {
+  id: string;
+  description: string;
+  date?: string | null;
+  completed: boolean;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -10,6 +17,10 @@ export interface Task {
   goalId: string;
   createdAt: number;
   dueDate?: string;
+  dueTime?: string;
+  category?: AppointmentCategory | string;
+  details?: string;
+  checklist?: ChecklistItem[];
 }
 
 export interface Goal {
@@ -17,6 +28,7 @@ export interface Goal {
   title: string;
   projectId: string;
   createdAt: number;
+  order?: number;
 }
 
 export interface Project {

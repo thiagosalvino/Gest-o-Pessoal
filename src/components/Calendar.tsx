@@ -45,6 +45,7 @@ import {
 } from 'lucide-react';
 import { Appointment, AppointmentCategory, RecurrenceType } from '../types';
 import { generateId, cn } from '../utils';
+import { CATEGORIES } from '../constants';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface CalendarProps {
@@ -61,15 +62,7 @@ interface CalendarProps {
 
 type ViewType = 'month' | 'week' | 'day';
 
-const CATEGORIES: { value: AppointmentCategory; label: string; icon: any; color: string }[] = [
-  { value: 'routine', label: 'Rotina', icon: Coffee, color: 'text-orange-500 bg-orange-50' },
-  { value: 'appointment', label: 'Compromissos', icon: Briefcase, color: 'text-orange-500 bg-orange-50' },
-  { value: 'task', label: 'Tarefas', icon: CheckSquare, color: 'text-emerald-500 bg-emerald-50' },
-  { value: 'project', label: 'Projeto', icon: FolderPlus, color: 'text-blue-500 bg-blue-50' },
-  { value: 'diet', label: 'Alimentação', icon: Utensils, color: 'text-rose-500 bg-rose-50' },
-  { value: 'training', label: 'Treino', icon: Dumbbell, color: 'text-indigo-500 bg-indigo-50' },
-  { value: 'study', label: 'Estudo', icon: BookOpen, color: 'text-amber-500 bg-amber-50' },
-];
+
 
 const RECURRENCE_OPTIONS: { value: RecurrenceType; label: string }[] = [
   { value: 'none', label: 'Não se repete' },
@@ -393,12 +386,14 @@ export const Calendar: React.FC<CalendarProps> = ({
                   </div>
                   <div className="space-y-1">
                     {dayAppointments.slice(0, 3).map(app => {
-                      const Icon = getCategoryIcon(app.category);
+                      const cat = CATEGORIES.find(c => c.value === app.category);
+                      const Icon = cat?.icon || Tag;
                       return (
                         <div 
                           key={app.id}
                           className={cn(
-                            "text-[10px] p-1 bg-orange-50 text-orange-700 rounded border border-orange-100 truncate font-medium flex items-center gap-1",
+                            "text-[10px] p-1 rounded border truncate font-medium flex items-center gap-1",
+                            cat?.color || "bg-orange-50 text-orange-700 border-orange-100",
                             app.completed && "line-through opacity-50"
                           )}
                         >

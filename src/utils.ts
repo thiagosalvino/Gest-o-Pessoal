@@ -24,3 +24,7 @@ export function validateCPF(cpf: string) {
   if (remainder !== parseInt(cpf.substring(10, 11))) return false;
   return true;
 }
+
+export function sanitizeFirestoreData<T>(data: T): T {
+  return JSON.parse(JSON.stringify(data, (_, value) => (value === undefined ? null : value)));
+}
